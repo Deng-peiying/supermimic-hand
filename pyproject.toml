@@ -24,6 +24,7 @@ dependencies = [
 
 [project.scripts]
 sm-train = "supermimic.scripts.train:main"
+sm-hand = "supermimic.hand.train:main"
 
 [dependency-groups]
 dev = [

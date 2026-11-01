@@ -1,5 +1,7 @@
 # SuperMimic-Reproduced
 
+Prima1 左手单片段无视觉转笔实验见 [HandMimic 使用说明](docs/HANDMIMIC.md)。该入口与下述 G1 复现独立，当前是已跑通的实验代码，尚未学会稳定转笔。
+
 # 中文版
 
 从零复现 **SuperMimic: Scaling Humanoid Whole-Body Control with One Differentiable World Model**（[arXiv:2610.28480](https://arxiv.org/abs/2610.28480)，CoRL 2026），目标机器人 Unitree G1，底座 [mjlab](https://github.com/mujocolab/mjlab) / MuJoCo Warp。论文没有公开代码，这里的动作库、可微 FK、世界模型、BPTT 训练器、基于回报的重置采样、多卡训练、Appendix F 评测全部按论文自己实现，不使用 rsl_rl。

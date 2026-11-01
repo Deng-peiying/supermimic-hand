@@ -12,4 +12,5 @@ wandb/
 *.onnx
 .pytest_cache/
 .ruff_cache/
+/runs/
 experiments/**/outputs/
