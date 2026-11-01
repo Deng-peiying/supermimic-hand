@@ -5,8 +5,8 @@ import numpy as np
 import pytest
 import torch
 
-from supermimic.data.motion_convert import load_g1_model
-from supermimic.kinematics.g1_fk import G1Kinematics
+from supermimic.tasks.motion_tracking.data.motion_convert import load_g1_model
+from supermimic.robots.g1.kinematics import G1Kinematics
 from supermimic.kinematics.rotations import quat_from_rotvec, rotvec_from_quat
 
 

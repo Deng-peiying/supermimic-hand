@@ -13,8 +13,8 @@ pytestmark = pytest.mark.skipif(not torch.cuda.is_available() or not NPZ.exists(
 
 def test_compact_matches_full():
     torch.backends.cuda.matmul.allow_tf32 = False
-    from supermimic.envs.mdp.motion_library import MotionLibrary, discover_npz
-    from supermimic.envs.tracking_env_cfg import TRACKED_BODIES
+    from supermimic.tasks.motion_tracking.envs.mdp.motion_library import MotionLibrary, discover_npz
+    from supermimic.tasks.motion_tracking.envs.tracking_env_cfg import TRACKED_BODIES
 
     files = discover_npz(NPZ, names=["walk1_subject1", "jumps1_subject1"])
     q0 = torch.zeros(29)

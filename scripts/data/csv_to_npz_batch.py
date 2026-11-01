@@ -56,13 +56,13 @@ def _init_worker() -> None:
     global _MODEL  # 声明使用模块级全局变量 _MODEL
     # Keep BLAS single-threaded inside workers. 每个工作进程加载一次 G1 机器人模型，供后续动作转换重复使用
     os.environ.setdefault("OMP_NUM_THREADS", "1")
-    from supermimic.data.motion_convert import load_g1_model
+    from supermimic.tasks.motion_tracking.data.motion_convert import load_g1_model
 
     _MODEL = load_g1_model() # 保存在当前工作进程中，避免每转换一个 CSV 都重新加载模型
 
 
 def _convert_one(args: tuple[str, str, float, float]) -> dict:
-    from supermimic.data.motion_convert import convert_csv_to_npz
+    from supermimic.tasks.motion_tracking.data.motion_convert import convert_csv_to_npz
 
     src, dst, in_fps, out_fps = args
     try:

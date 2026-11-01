@@ -19,13 +19,13 @@ def setup():
     torch.backends.cuda.matmul.allow_tf32 = False
     from mjlab.tasks.tracking import mdp as track_mdp
 
-    from supermimic.data.motion_convert import load_g1_model
-    from supermimic.envs import SuperMimicEnvCfgArgs, make_env
-    from supermimic.envs.mdp.motion_library import discover_npz
-    from supermimic.envs.state_io import StateIO
-    from supermimic.envs.tracking_env_cfg import ANCHOR_BODY, ROOT_BODY, TRACKED_BODIES
-    from supermimic.kinematics.g1_fk import G1Kinematics
-    from supermimic.world_model.heads import AnalyticHeads
+    from supermimic.tasks.motion_tracking.data.motion_convert import load_g1_model
+    from supermimic.tasks.motion_tracking.envs import SuperMimicEnvCfgArgs, make_env
+    from supermimic.tasks.motion_tracking.envs.mdp.motion_library import discover_npz
+    from supermimic.tasks.motion_tracking.envs.state_io import StateIO
+    from supermimic.tasks.motion_tracking.envs.tracking_env_cfg import ANCHOR_BODY, ROOT_BODY, TRACKED_BODIES
+    from supermimic.robots.g1.kinematics import G1Kinematics
+    from supermimic.tasks.motion_tracking.world_model.heads import AnalyticHeads
 
     files = discover_npz(NPZ, names=["walk1_subject1", "fight1_subject2"])
     args = SuperMimicEnvCfgArgs(npz_files=[str(f) for f in files], num_envs=16, replay_capacity=64, obs_noise=False, seed=3)
@@ -46,7 +46,7 @@ def setup():
 
 
 def _ref_from_command(cmd):
-    from supermimic.world_model.heads import ReferenceFrame
+    from supermimic.tasks.motion_tracking.world_model.heads import ReferenceFrame
 
     lib, f = cmd.library, cmd.frame
     return ReferenceFrame(
@@ -91,7 +91,7 @@ def test_reward_terms_match_mjlab(setup):
 
 def test_observation_head_matches_env(setup):
     env, heads, io, robot = setup["env"], setup["heads"], setup["io"], setup["robot"]
-    from supermimic.world_model.heads import analytic_observation, flatten_history_term_major
+    from supermimic.tasks.motion_tracking.world_model.heads import analytic_observation, flatten_history_term_major
 
     obs, _ = env.reset()
     rec = env.recorder_manager.get_term("replay")
@@ -120,7 +120,7 @@ def test_observation_head_matches_env(setup):
 
 def test_termination_matches_env(setup):
     env, heads, io = setup["env"], setup["heads"], setup["io"]
-    from supermimic.envs.mdp import terminations as sm_term
+    from supermimic.tasks.motion_tracking.envs.mdp import terminations as sm_term
 
     env.reset()
     cmd = env.command_manager.get_term("motion")
@@ -141,13 +141,13 @@ def test_termination_matches_env(setup):
 
 def test_anchor_relative_obs_matches_env():
     """The analytic anchor-relative term (from state via FK) equals mjlab's observation terms."""
-    from supermimic.data.motion_convert import load_g1_model
-    from supermimic.envs import SuperMimicEnvCfgArgs, make_env
-    from supermimic.envs.mdp.motion_library import discover_npz
-    from supermimic.envs.state_io import StateIO
-    from supermimic.envs.tracking_env_cfg import ANCHOR_BODY, ROOT_BODY, TRACKED_BODIES
-    from supermimic.kinematics.g1_fk import G1Kinematics
-    from supermimic.world_model.heads import AnalyticHeads, anchor_relative_obs
+    from supermimic.tasks.motion_tracking.data.motion_convert import load_g1_model
+    from supermimic.tasks.motion_tracking.envs import SuperMimicEnvCfgArgs, make_env
+    from supermimic.tasks.motion_tracking.envs.mdp.motion_library import discover_npz
+    from supermimic.tasks.motion_tracking.envs.state_io import StateIO
+    from supermimic.tasks.motion_tracking.envs.tracking_env_cfg import ANCHOR_BODY, ROOT_BODY, TRACKED_BODIES
+    from supermimic.robots.g1.kinematics import G1Kinematics
+    from supermimic.tasks.motion_tracking.world_model.heads import AnalyticHeads, anchor_relative_obs
 
     files = discover_npz(NPZ, names=["walk1_subject1"])
     env = make_env(SuperMimicEnvCfgArgs(npz_files=[str(f) for f in files], num_envs=8, obs_noise=False, anchor_obs=True, record_transitions=False, seed=4), "cuda:0")

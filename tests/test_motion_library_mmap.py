@@ -10,8 +10,8 @@ import pytest
 import torch
 
 from supermimic.data.compact_cache import build
-from supermimic.envs.mdp.motion_library import MotionLibrary, discover_npz
-from supermimic.envs.tracking_env_cfg import TRACKED_BODIES
+from supermimic.tasks.motion_tracking.envs.mdp.motion_library import MotionLibrary, discover_npz
+from supermimic.tasks.motion_tracking.envs.tracking_env_cfg import TRACKED_BODIES
 
 NPZ = Path(__file__).resolve().parents[1] / "data/npz/lafan1"
 

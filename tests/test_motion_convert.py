@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from supermimic.data.motion_convert import (
+from supermimic.tasks.motion_tracking.data.motion_convert import (
     G1_JOINT_NAMES,
     forward_kinematics,
     load_csv,
@@ -57,7 +57,7 @@ def test_resample_matches_mjlab_motion_loader():
     gt = slerp(times).as_quat()[:, [3, 0, 1, 2]]
     _signed_quat_close(ours.root_quat, gt, atol=1e-6)  # nlerp branch for near-identical keys
     # Angular velocity: our central difference of the scipy-exact rotations.
-    from supermimic.data.motion_convert import _so3_derivative
+    from supermimic.tasks.motion_tracking.data.motion_convert import _so3_derivative
 
     np.testing.assert_allclose(ours.root_ang_vel_w, _so3_derivative(gt, 0.02), atol=1e-4)
 

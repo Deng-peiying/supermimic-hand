@@ -9,8 +9,8 @@ from pathlib import Path
 
 import tyro
 
-from supermimic.envs.mdp.motion_library import discover_npz
-from supermimic.eval.benchmark import load_policy_from_checkpoint, run_benchmark, save_results, summarize
+from supermimic.tasks.motion_tracking.envs.mdp.motion_library import discover_npz
+from supermimic.tasks.motion_tracking.eval.benchmark import load_policy_from_checkpoint, run_benchmark, save_results, summarize
 
 
 def main(ckpt: Path, npz_dir: Path = Path("data/npz/lafan1"), clips: list[str] | None = None, clip_list: Path | None = None, manifest: Path | None = None, num_envs: int = 1024, device: str = "cuda:0", out: Path | None = None) -> None:

@@ -17,7 +17,7 @@ def _random_states(n, device, dtype=torch.float32):
 
 
 def test_state_spec_identity_and_errors():
-    from supermimic.world_model.state_spec import StateSpec, StateSpecCfg
+    from supermimic.tasks.motion_tracking.world_model.state_spec import StateSpec, StateSpecCfg
 
     dev = "cpu"
     spec = StateSpec(StateSpecCfg(explicit_integration=False), dev, torch.float64)
@@ -45,14 +45,14 @@ def test_state_spec_identity_and_errors():
 @pytest.mark.skipif(not torch.cuda.is_available() or not NPZ.exists(), reason="needs CUDA + LAFAN1 npz")
 def test_world_model_overfits_replay_windows():
     """Collect a little data with a random policy, fit the WM for a few hundred steps: error must drop a lot."""
-    from supermimic.data.motion_convert import load_g1_model
-    from supermimic.envs import SuperMimicEnvCfgArgs, make_env
-    from supermimic.envs.mdp.motion_library import discover_npz
-    from supermimic.envs.tracking_env_cfg import ANCHOR_BODY, ROOT_BODY, TRACKED_BODIES
-    from supermimic.kinematics.g1_fk import G1Kinematics
-    from supermimic.world_model.heads import AnalyticHeads
-    from supermimic.world_model.wm_trainer import WMTrainerCfg, WorldModelTrainer
-    from supermimic.world_model.world_model import WorldModel, WorldModelCfg
+    from supermimic.tasks.motion_tracking.data.motion_convert import load_g1_model
+    from supermimic.tasks.motion_tracking.envs import SuperMimicEnvCfgArgs, make_env
+    from supermimic.tasks.motion_tracking.envs.mdp.motion_library import discover_npz
+    from supermimic.tasks.motion_tracking.envs.tracking_env_cfg import ANCHOR_BODY, ROOT_BODY, TRACKED_BODIES
+    from supermimic.robots.g1.kinematics import G1Kinematics
+    from supermimic.tasks.motion_tracking.world_model.heads import AnalyticHeads
+    from supermimic.tasks.motion_tracking.world_model.wm_trainer import WMTrainerCfg, WorldModelTrainer
+    from supermimic.tasks.motion_tracking.world_model.world_model import WorldModel, WorldModelCfg
 
     files = discover_npz(NPZ, names=["walk1_subject1", "dance1_subject1"])
     env = make_env(SuperMimicEnvCfgArgs(npz_files=[str(f) for f in files], num_envs=256, replay_capacity=400, seed=5), "cuda:0")

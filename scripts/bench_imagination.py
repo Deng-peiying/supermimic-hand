@@ -10,17 +10,17 @@ import tyro
 
 
 def main(batch: int = 2048, horizon: int = 32, modes: tuple[str, ...] = ("eager", "default"), reps: int = 3, clips: int = 1) -> None:
-    from supermimic.data.motion_convert import load_g1_model
-    from supermimic.data.replay_buffer import StartBatch
-    from supermimic.envs.mdp.motion_library import MotionLibrary, discover_npz
-    from supermimic.envs.tracking_env_cfg import ANCHOR_BODY, ROOT_BODY, TRACKED_BODIES
-    from supermimic.imagination.compiled import ImagStep
-    from supermimic.imagination.objective import policy_objective
-    from supermimic.imagination.rollout import imagine
-    from supermimic.kinematics.g1_fk import G1Kinematics
-    from supermimic.policy.nets import Policy, PolicyCfg
-    from supermimic.world_model.heads import AnalyticHeads
-    from supermimic.world_model.world_model import WorldModel, WorldModelCfg
+    from supermimic.tasks.motion_tracking.data.motion_convert import load_g1_model
+    from supermimic.algorithms.replay_buffer import StartBatch
+    from supermimic.tasks.motion_tracking.envs.mdp.motion_library import MotionLibrary, discover_npz
+    from supermimic.tasks.motion_tracking.envs.tracking_env_cfg import ANCHOR_BODY, ROOT_BODY, TRACKED_BODIES
+    from supermimic.tasks.motion_tracking.imagination.compiled import ImagStep
+    from supermimic.tasks.motion_tracking.imagination.objective import policy_objective
+    from supermimic.tasks.motion_tracking.imagination.rollout import imagine
+    from supermimic.robots.g1.kinematics import G1Kinematics
+    from supermimic.tasks.motion_tracking.policy.nets import Policy, PolicyCfg
+    from supermimic.tasks.motion_tracking.world_model.heads import AnalyticHeads
+    from supermimic.tasks.motion_tracking.world_model.world_model import WorldModel, WorldModelCfg
 
     torch.backends.cuda.matmul.allow_tf32 = True
     dev = "cuda:0"

@@ -109,7 +109,7 @@ def _foot_sole_height(npz_path: str, gate: np.ndarray) -> np.ndarray:
     import re
 
     if _MODEL is None:
-        from supermimic.data.motion_convert import load_g1_model
+        from supermimic.tasks.motion_tracking.data.motion_convert import load_g1_model
 
         _MODEL = load_g1_model()
         _FOOT_GEOMS = [g for g in range(_MODEL.ngeom) if re.match(r"^(left|right)_foot[1-7]_collision$", mujoco.mj_id2name(_MODEL, mujoco.mjtObj.mjOBJ_GEOM, g) or "")]

@@ -53,7 +53,7 @@ cd /mnt/d/Prima1/supermimic-hand
 ```bash
 cd /mnt/d/Prima1/supermimic-hand
 export PYTHONPATH=src OMP_NUM_THREADS=2 TORCHINDUCTOR_COMPILE_THREADS=2
-/root/.venvs/supermimic-hand/bin/python -u -m supermimic.scripts.train \
+/root/.venvs/supermimic-hand/bin/python -u -m supermimic.scripts.run g1_tracking \
   --run-name g1_bones_full_4060_20261101 \
   --data.library /root/.cache/supermimic/bones_seed_filtered_v1/library.json \
   --env.num-envs 128 --env.replay-capacity 1000 \

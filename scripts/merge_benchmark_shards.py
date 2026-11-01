@@ -10,7 +10,7 @@ from pathlib import Path
 
 import tyro
 
-from supermimic.eval.benchmark import ClipResult, save_results, summarize
+from supermimic.tasks.motion_tracking.eval.benchmark import ClipResult, save_results, summarize
 
 
 def main(shards: list[Path], out: Path | None = None) -> None:

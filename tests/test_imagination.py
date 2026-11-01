@@ -11,7 +11,7 @@ NPZ = ROOT / "data/npz/lafan1"
 
 
 def test_gae_targets_match_hand_computation():
-    from supermimic.imagination.objective import gae_targets
+    from supermimic.tasks.motion_tracking.imagination.objective import gae_targets
 
     H, n = 4, 3
     g, lam = 0.9, 0.8
@@ -32,8 +32,8 @@ def test_gae_targets_match_hand_computation():
 
 @pytest.mark.skipif(not torch.cuda.is_available() or not NPZ.exists(), reason="needs CUDA + LAFAN1 npz")
 def test_training_smoke(tmp_path):
-    from supermimic.config import TrainConfig
-    from supermimic.training.loop import Trainer
+    from supermimic.tasks.motion_tracking.config import TrainConfig
+    from supermimic.tasks.motion_tracking.training.loop import Trainer
 
     cfg = TrainConfig(run_name="smoke", log_root=tmp_path, seed=1)
     cfg.data.clips = ["walk1_subject1"]

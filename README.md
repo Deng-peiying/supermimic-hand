@@ -1,6 +1,38 @@
 # SuperMimic-Reproduced
 
+多任务框架、目录边界与扩展方法见 [架构说明](docs/ARCHITECTURE.md)。G1 与 Prima1 任务分别位于 `src/supermimic/tasks/motion_tracking/` 和 `src/supermimic/tasks/pen_spin/`，统一入口为 `sm-run`。旧目录转发模块和旧命令入口已移除。
+
+两个任务按相同职责分包；查找修改入口、对照目录和新增任务，请从 [任务开发指南](docs/TASK_DEVELOPMENT.md) 开始。
+
+Prima1 当前已接入完整 SuperMimic 训练机制与4096环境 GPU 接触仿真，配置、数据策略及验证边界见 [转笔训练说明](docs/PRIMA1_SUPERMIMIC_4096.md)。
+
 Prima1 左手单片段无视觉转笔实验见 [HandMimic 使用说明](docs/HANDMIMIC.md)。该入口与下述 G1 复现独立，当前是已跑通的实验代码，尚未学会稳定转笔。
+
+公共神经网络位于 `src/supermimic/algorithms/networks.py` 和 `models.py`；`robots/`
+只定义机器人状态、运动学与约束，`tasks/` 负责配置与组装。两个任务不互相导入，默认独立训练权重。
+
+## 新增任务：复制任务包
+
+以 `src/supermimic/tasks/motion_tracking/` 为完整任务模板，复制为
+`src/supermimic/tasks/my_task/`（只复制源码，不复制 `__pycache__`）。包内使用相对导入，
+重命名后内部引用仍指向新任务。公共网络从 `supermimic.algorithms` 引用。
+
+1. 在 `src/supermimic/tasks/registry.py` 注册
+   `TaskSpec("my_task", "你的机器人", "mjlab", "supermimic.tasks.my_task.train:main")`。
+2. 修改新任务引用的 `supermimic.robots.*`、机器人资产、关节和跟踪 body 配置。
+3. 修改 `policy/nets.py` 的网络组装、观测和目标维度，以及 `world_model/state_spec.py`
+   的状态编码、输出解释和积分。同步检查 `envs/state_io.py`、`envs/sim_context.py`
+   和 `world_model/heads.py` 的布局、维度与缩放。
+4. 修改 `envs/mdp/` 中的观测、动作参考、奖励、终止和 `reward_cfg.py`；
+   对应更新想象过程使用的 `world_model/heads.py` 与 `imagination/` 任务逻辑。
+5. 用 `sm-run my_task --help` 检查入口，再运行短训练。
+
+任务包保留自己的 WM 状态语义、想象观测/奖励适配与训练组装；公共网络和回报算子无需复制。
+当前 WM 多步损失、imagination rollout 和优化器循环仍有任务专用实现，尚未统一为公共训练引擎。
+目前模板默认是 G1：同一机器人的新任务主要改 MDP；换成不同状态结构的机器人，不能只改维度。
+现有 `scripts/` 下的 G1 数据转换与评测脚本也不会随任务包复制自动变成新任务入口。
+
+待清理的临时产物统一放入 `laji/`，可手动清空其中内容。该目录已加入 Git 忽略列表。
 
 # 中文版
 
@@ -37,27 +69,90 @@ Prima1 左手单片段无视觉转笔实验见 [HandMimic 使用说明](docs/HAN
 
 | 论文 | 实现 |
 |---|---|
-| Appendix E 数据：LAFAN1（2.45 h）与 BONES-SEED（14.2 万 CSV → 名字 + 可行性过滤后 12.99 万条 / 264 h） | `scripts/data/csv_to_npz_batch.py`、`filter_bones_seed.py`、`build_library.py`；`src/supermimic/data/`（自己的向量化 slerp：mjlab 的在相邻帧几乎相同时提前返回、姿态滞后一帧） |
-| 多 clip 动作库、K=10 未来帧目标、1 s 分桶的回报重置采样（50% 均匀 / 40% softmax(−25 G/Gmax) / 10% 记忆） | `src/supermimic/envs/mdp/motion_library.py`（fp16 紧凑库常驻显存、在线 FK）、`commands.py` |
-| Table A.1–A.4 观测、BeyondMimic 8 项奖励、终止（\|Δh\| > 0.25 m 或 tilt > 0.8）、sim context ξ = 摩擦 / 关节偏置 / 躯干质心 | `src/supermimic/envs/mdp/{observations,rewards,terminations}.py`、`sim_context.py`、`state_io.py` |
-| 可微 G1 FK（位置与速度），fp64 下与 MuJoCo 一致到 1e-10 | `src/supermimic/kinematics/g1_fk.py` |
-| 世界模型：朝向规范化特征上的 MLP 动力学 + 显式积分、学习式终止头、经 FK 的**解析**奖励/观测头；k=8 自回归损失（Eq. 1） | `src/supermimic/world_model/` |
-| 想象：H=32 BPTT 策略更新（生存加权 + critic 自举，Eq. 2）、TD(λ=0.95) critic（Eq. 3）、`torch.compile` 的 fwd+bwd | `src/supermimic/imagination/` |
-| Algorithm A.1 主循环、UTD 0.4、Table A.5/A.6 超参、余弦学习率、torchrun 数据并行（每 rank 一个仿真器、显式 all-reduce、lr × √卡数） | `src/supermimic/training/loop.py`、`src/supermimic/scripts/train.py` |
-| Appendix F 评测、推力测试、漂移诊断、交互回放 | `src/supermimic/eval/benchmark.py`、`scripts/eval_benchmark.py`、`eval_push.py`、`diag_drift.py`、`play.py` |
+| Appendix E 数据：LAFAN1（2.45 h）与 BONES-SEED（14.2 万 CSV → 名字 + 可行性过滤后 12.99 万条 / 264 h） | `scripts/data/csv_to_npz_batch.py`、`filter_bones_seed.py`、`build_library.py`；`src/supermimic/tasks/motion_tracking/data/`（自己的向量化 slerp：mjlab 的在相邻帧几乎相同时提前返回、姿态滞后一帧） |
+| 多 clip 动作库、K=10 未来帧目标、1 s 分桶的回报重置采样（50% 均匀 / 40% softmax(−25 G/Gmax) / 10% 记忆） | `src/supermimic/tasks/motion_tracking/envs/mdp/motion_library.py`（fp16 紧凑库常驻显存、在线 FK）、`commands.py` |
+| Table A.1–A.4 观测、BeyondMimic 8 项奖励、终止（\|Δh\| > 0.25 m 或 tilt > 0.8）、sim context ξ = 摩擦 / 关节偏置 / 躯干质心 | `src/supermimic/tasks/motion_tracking/envs/mdp/{observations,rewards,terminations}.py`、`sim_context.py`、`state_io.py` |
+| 可微 G1 FK（位置与速度），fp64 下与 MuJoCo 一致到 1e-10 | `src/supermimic/robots/g1/kinematics.py` |
+| 世界模型：朝向规范化特征上的 MLP 动力学 + 显式积分、学习式终止头、经 FK 的**解析**奖励/观测头；k=8 自回归损失（Eq. 1） | `src/supermimic/tasks/motion_tracking/world_model/` |
+| 想象：H=32 BPTT 策略更新（生存加权 + critic 自举，Eq. 2）、TD(λ=0.95) critic（Eq. 3）、`torch.compile` 的 fwd+bwd | `src/supermimic/tasks/motion_tracking/imagination/` |
+| Algorithm A.1 主循环、UTD 0.4、Table A.5/A.6 超参、余弦学习率、torchrun 数据并行（每 rank 一个仿真器、显式 all-reduce、lr × √卡数） | `src/supermimic/tasks/motion_tracking/training/loop.py`、`src/supermimic/tasks/motion_tracking/train.py` |
+| Appendix F 评测、推力测试、漂移诊断、交互回放 | `src/supermimic/tasks/motion_tracking/eval/benchmark.py`、`scripts/eval_benchmark.py`、`eval_push.py`、`diag_drift.py`、`play.py` |
 
 论文未指明之处（U1–U20，见 [`docs/PAPER_SPEC.md`](docs/PAPER_SPEC.md)）和设计决策（D1–D20，见 [`docs/REPRODUCTION_PLAN.md`](docs/REPRODUCTION_PLAN.md)）都记录了理由；实测后改动的决定在实验日志里。未做：速度接口与蒸馏、PPO 基线、H×critic 消融、ONNX 导出、真机。
 
 ## 环境、数据、训练、评测
 
-命令与英文版相同，见上文 Setup / Data / Training / Evaluation and media 四节。要点：
+以下命令在仓库根目录执行，GPU 训练使用 Linux / WSL 环境。
+
+安装依赖并查看任务：
+
+```bash
+uv sync
+uv run sm-run --list
+uv run sm-run g1_tracking --help
+uv run sm-run prima1_pen_spin --help
+```
+
+G1 单卡训练、多卡训练与评估（需先准备对应 NPZ 数据）：
+
+```bash
+uv run sm-run g1_tracking --run-name g1-lafan1 \
+  --data.npz-dir data/npz/lafan1 --env.num-envs 4096
+
+uv run torchrun --nproc_per_node 4 -m supermimic.scripts.run g1_tracking \
+  --run-name g1-lafan1-4gpu --data.npz-dir data/npz/lafan1
+
+uv run python scripts/eval_benchmark.py \
+  --ckpt logs/g1-lafan1/ckpt_latest.pt --npz-dir data/npz/lafan1
+```
+
+Prima1 查看奖励配置、hold 阶段训练、同阶段续训与评估：
+
+```bash
+uv run sm-run prima1_pen_spin describe --stage hold
+uv run sm-run prima1_pen_spin train --stage hold --output runs/hand/hold-001
+uv run sm-run prima1_pen_spin train --stage hold \
+  --resume runs/hand/hold-001/checkpoint.pt --output runs/hand/hold-001
+uv run sm-run prima1_pen_spin evaluate --stage hold \
+  --checkpoint runs/hand/hold-001/checkpoint.pt --output runs/hand/hold-eval
+```
+
+使用已有虚拟环境时，可用 `PYTHONPATH=src python -m supermimic.scripts.run` 替代
+`uv run sm-run`。Prima1 资产准备、short/full 阶段与跨阶段初始化见
+[HandMimic 使用说明](docs/HANDMIMIC.md)。旧 Hand 检查点若记录的是旧奖励函数路径，
+使用 `--initialize` 开启新实验，不能直接当作新配置 `--resume`。
+
+环境与数据要点：
 
 - Python 3.12 + `uv`；固定 torch 2.14.1+cu130、mujoco 3.16、warp 1.18、mjlab `8bb2bc9`；在 RTX 5090（驱动 580）上验证。系统 `PYTHONPATH` 若带有其他 Python 包（例如 ROS），命令前加 `env -u PYTHONPATH`。
 - 数据不随仓库分发：LAFAN1 来自 HF `lvhaidong/LAFAN1_Retargeting_Dataset` 的 `g1/`；BONES-SEED 来自 HF `bones-studio/seed` 的 `g1.tar.gz`，转 50 Hz npz → 过滤 → fp16 紧凑库（6.7 GB，常驻显存）。
-- 训练默认超参按 Table A.5/A.6；多卡用 `torchrun --nproc_per_node 4 -m supermimic.scripts.train`，一进程一卡。
+- 训练默认超参按 Table A.5/A.6；多卡用 `torchrun --nproc_per_node 4 -m supermimic.scripts.run g1_tracking`，一进程一卡。
 - 录制与渲染：`scripts/media/record_rollout.py` 按 Appendix F 协议记录每步的机器人与参考 qpos，`scripts/media/render_rollout.py` 用 MuJoCo 离屏渲染（实体 = 策略，半透明 = 参考），`--segments` 选时间窗、`--titles` 写标题、`--concat` 拼接。
 
 ## 文档
+
+### G1 训练日志字段
+
+例如 `it 12500 | 0.71 h | 4.8 it/s | updates 4984 | train_ret 0.702 (n=3842) | wm nse1 0.0063 nse8 0.0133 | imag_ret 2.475 surv 0.999 | t sim/wm/pi 2.5/6.4/12.0s`：
+
+| 字段 | 含义与判断方式 |
+|---|---|
+| `it` | 并行环境步进次数；一次迭代让各环境各走一步，不是回合数。 |
+| `h` | 本次运行的墙钟小时数；续训重新计时。 |
+| `it/s` | 最近日志区间的迭代速度，包含仿真与优化过程。 |
+| `updates` | 累计完成的外层更新轮数；每轮包含世界模型更新以及配置数量的策略更新，不等于梯度步数。 |
+| `train_ret` | 最近区间结束回合的归一化回报均值：每回合 `sum(reward)/(max_step_reward × steps)`。默认 `max_step_reward=0.1`，1 为完美跟踪尺度；0.702 不是 70.2% 成功率。 |
+| `n` | 上述统计使用的结束回合数量，包含失败与时间截断；多卡时汇总各进程。 |
+| `wm nse1` | 世界模型训练批次的一步归一化平方状态误差，越低越好；它不是百分比或单一物理单位的误差。 |
+| `nse8` | 近期回放样本上，用实际动作连续开环预测至第 8 步的归一化平方误差；默认对应 0.16 秒后。与 nse1 的采样及统计口径不同。 |
+| `imag_ret` | 想象时域内按存活权重加权的未折扣奖励和，不含 critic 自举，也未按时域长度归一化。默认 H=32 时，满分参考为 3.2。 |
+| `surv` | 想象轨迹末端的平均预测存活权重，沿途存活概率累乘；不是实测成功率。 |
+| `t sim/wm/pi` | 最近日志区间累计的仿真、世界模型优化、策略与 critic 优化耗时，单位秒，不是单步耗时。 |
+
+`train_ret` 与 `imag_ret` 的起始状态、时域和归一化方式不同，不能直接比较。
+判断训练是否改善应结合归一化回报、回合长度、失败率以及独立整段评估；仅凭几行日志不能判断收敛。
+
+### 文档索引
 
 | 文件 | 内容 |
 |---|---|
@@ -70,7 +165,7 @@ Prima1 左手单片段无视觉转笔实验见 [HandMimic 使用说明](docs/HAN
 
 - mjlab 的 `csv_to_npz` 四元数 slerp 在相邻帧几乎相同时会提前返回（姿态滞后一帧），本仓库用自己的向量化 slerp（与 scipy 一致到 1e-9）。
 - MuJoCo Warp 的 solver 溢出 printf 是编译期常量，必须在 `put_model` 后、图捕获前关闭，否则早期策略每步触发、仿真慢 10×。
-- torchrun 下 MuJoCo Warp 总在第一张可见卡上，`scripts/train.py` 按 rank 设置 `CUDA_VISIBLE_DEVICES`。
+- torchrun 下 MuJoCo Warp 总在第一张可见卡上，`src/supermimic/tasks/motion_tracking/train.py` 按 rank 设置 `CUDA_VISIBLE_DEVICES`。
 - 续训时回放缓冲区的预热相对续训点重新计数（正式 run 曾因误杀续训过一次）。
 
 ## 致谢与许可

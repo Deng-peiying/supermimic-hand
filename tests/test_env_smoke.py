@@ -16,8 +16,8 @@ pytestmark = [
 
 @pytest.fixture(scope="module")
 def env():
-    from supermimic.envs import SuperMimicEnvCfgArgs, make_env
-    from supermimic.envs.mdp.motion_library import discover_npz
+    from supermimic.tasks.motion_tracking.envs import SuperMimicEnvCfgArgs, make_env
+    from supermimic.tasks.motion_tracking.envs.mdp.motion_library import discover_npz
 
     files = discover_npz(NPZ, names=["walk1_subject1", "dance1_subject1", "jumps1_subject1"])
     assert len(files) == 3
@@ -74,7 +74,7 @@ def test_replay_rows_and_windows(env):
 
 
 def test_state_io_round_trip(env):
-    from supermimic.envs.state_io import StateIO
+    from supermimic.tasks.motion_tracking.envs.state_io import StateIO
 
     io = StateIO(env)
     s = io.read()

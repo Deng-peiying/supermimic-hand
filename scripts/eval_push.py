@@ -20,7 +20,7 @@ import tyro
 
 def make_tpose_clip(out: Path, seconds: float = 20.0, fps: int = 50) -> Path:
     """Write a 50 Hz T-pose npz (standing still) via the converter's FK."""
-    from supermimic.data.motion_convert import G1_JOINT_NAMES, forward_kinematics, load_g1_model, ResampledMotion
+    from supermimic.tasks.motion_tracking.data.motion_convert import G1_JOINT_NAMES, forward_kinematics, load_g1_model, ResampledMotion
 
     T = int(seconds * fps)
     q = np.zeros((T, len(G1_JOINT_NAMES)))
@@ -56,8 +56,8 @@ def make_tpose_clip(out: Path, seconds: float = 20.0, fps: int = 50) -> Path:
 
 @torch.no_grad()
 def main(ckpt: Path, speeds: tuple[float, ...] = (0.5, 1.0, 2.0, 4.0), num_envs: int = 256, device: str = "cuda:0", push_time_s: float = 1.0, horizon_s: float = 8.0) -> None:
-    from supermimic.envs import SuperMimicEnvCfgArgs, make_env
-    from supermimic.eval.benchmark import load_policy_from_checkpoint
+    from supermimic.tasks.motion_tracking.envs import SuperMimicEnvCfgArgs, make_env
+    from supermimic.tasks.motion_tracking.eval.benchmark import load_policy_from_checkpoint
 
     policy, cfg = load_policy_from_checkpoint(ckpt, device)
     tmp = Path(tempfile.mkdtemp()) / "tpose.npz"

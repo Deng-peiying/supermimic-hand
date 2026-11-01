@@ -1,6 +1,6 @@
 """数据并行训练辅助工具（计划 D13 / 6.3）。
 使用 torchrun 启动，每张 GPU 对应一个独立进程：
-  torchrun --nproc_per_node 4 -m supermimic.scripts.train --run-name e5_ws ...
+  torchrun --nproc_per_node 4 -m supermimic.scripts.run g1_tracking --run-name e5_ws ...
 每个进程（rank）独立拥有自己的仿真器（包含 num_envs 个并行环境）、经验回放缓冲区（replay buffer）和采样器（sampler）。
 世界模型（world model）、策略网络（policy）和价值评估网络（critic）在各个进程中分别维护一份副本。
 在反向传播（backward）之后，通过显式的 all-reduce 操作对各进程的梯度进行聚合并求平均。

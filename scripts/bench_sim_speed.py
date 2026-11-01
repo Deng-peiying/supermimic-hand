@@ -10,8 +10,8 @@ import tyro
 
 
 def main(num_envs: int = 4096, steps: int = 300, warmup: int = 50, record: bool = True, clips: int = 3) -> None:
-    from supermimic.envs import SuperMimicEnvCfgArgs, make_env
-    from supermimic.envs.mdp.motion_library import discover_npz
+    from supermimic.tasks.motion_tracking.envs import SuperMimicEnvCfgArgs, make_env
+    from supermimic.tasks.motion_tracking.envs.mdp.motion_library import discover_npz
 
     files = discover_npz(Path("data/npz/lafan1"), limit=clips)
     args = SuperMimicEnvCfgArgs(npz_files=[str(f) for f in files], num_envs=num_envs, record_transitions=record)

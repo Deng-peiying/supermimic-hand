@@ -4,17 +4,17 @@ import numpy as np
 import pytest
 import torch
 
-from supermimic.hand.data import DEFAULT_CLIP, JOINTS, Clip
-from supermimic.hand.deployment import OfflineController
-from supermimic.hand.env import HandEnv
-from supermimic.hand.networks import (
-    Actor,
-    WorldModel,
-    initial_history,
-    mimic_reward,
-    survival_probability,
-)
-from supermimic.hand.train import collect, export
+from supermimic.tasks.pen_spin.data import DEFAULT_CLIP, JOINTS, Clip
+from supermimic.tasks.pen_spin.data.recorder import collect
+from supermimic.tasks.pen_spin.deployment.controller import OfflineController
+from supermimic.tasks.pen_spin.deployment.export import export
+from supermimic.tasks.pen_spin.envs.env import HandEnv
+from supermimic.tasks.pen_spin.envs.mdp.observations import initial_history
+from supermimic.tasks.pen_spin.envs.mdp.terminations import survival_probability
+from supermimic.tasks.pen_spin.policy.nets import Actor
+from supermimic.tasks.pen_spin.policy.reference import future_joint_reference
+from supermimic.tasks.pen_spin.world_model.heads import mimic_reward
+from supermimic.tasks.pen_spin.world_model.world_model import WorldModel
 
 
 @pytest.fixture
@@ -30,7 +30,7 @@ def test_actor_no_privileged_inputs_and_bounded():
     state = torch.zeros(2, 57)
     state[1, 44:] = 100  # 笔的位置、速度、姿态全部不同。
     history = initial_history(state[:, :22])
-    output = actor(history, torch.zeros(2, 22), torch.zeros(2, 1))
+    output = actor(history, torch.zeros(2, 10, 22), torch.zeros(2, 1))
     assert torch.equal(output[0], output[1])
     assert output.abs().max() <= 0.12
 
@@ -49,7 +49,7 @@ def test_imagination_survival_has_distance_gradient():
 def test_world_model_action_gradient_and_quaternion():
     torch.manual_seed(3)
     wm = WorldModel()
-    torch.nn.init.normal_(wm.net[-1].weight, std=0.001)
+    torch.nn.init.normal_(wm.dynamics.mlp.net[-1].weight, std=0.001)
     wm.requires_grad_(False)
     state = torch.zeros(3, 57)
     state[:, 47] = 1
@@ -104,7 +104,9 @@ def test_export_runtime_and_watchdog(env, tmp_path):
     values = dict(zip(JOINTS, q))
     result = controller.step(values, 0.0)
     expected = actor(
-        initial_history(torch.tensor(q[None])), torch.tensor(env.clip.q[None, 1]), torch.zeros(1, 1)
+        initial_history(torch.tensor(q[None])),
+        future_joint_reference(torch.tensor(env.clip.q), torch.tensor([0]), env.length, env.stage),
+        torch.zeros(1, 1),
     )
     np.testing.assert_allclose(list(result.values()), expected.detach().numpy()[0], atol=1e-6)
     with pytest.raises(TimeoutError):

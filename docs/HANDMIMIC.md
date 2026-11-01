@@ -1,7 +1,14 @@
 # Prima1 左手：单片段无视觉转笔实验
 
-本分支是第一轮可执行的模型式模仿实验，不是已经学会转笔的策略。原 G1 入口 `sm-train` 保留。
+本分支是第一轮可执行的模型式模仿实验，不是已经学会转笔的策略。G1 使用 `sm-run g1_tracking`，Prima1 使用 `sm-run prima1_pen_spin`。
 基线提交 `1001aa9` 的备注是“添加中文注释”，新增代码在 `hand` 分支。
+
+多任务目录和扩展方式见 [框架说明](ARCHITECTURE.md)，任务实现位于 `tasks/pen_spin/`，旧目录转发源码已移除。
+
+**代码阅读入口：[Prima1 配置与奖励指南](HAND_CODE_GUIDE.md)。**
+奖励已按 mjlab 的 `func / weight / params` 风格拆分；没有继承 G1 奖励。
+全部 6 项在 `src/supermimic/tasks/pen_spin/reward_cfg.py`，公式在 `tasks/pen_spin/envs/mdp/rewards.py`。
+运行 `python -m supermimic.scripts.run prima1_pen_spin describe --stage short` 可查看完整生效配置。
 
 ## 1. 先只用这一段
 
@@ -42,17 +49,17 @@ Windows 完整位置：`D:\Prima1\datasets\prima1_left_pen_spin\candidates\round
 ## 3. 已实现的训练方法
 
 1. 用真实 MuJoCo 接触仿真采集转移，控制周期 20 ms、物理子步 2 ms。
-2. 用监督学习拟合 57 维特权状态的增量世界模型；四元数归一化并处理符号等价。
-3. 冻结世界模型参数，从真实回放初态出发，通过短窗口 BPTT 优化 Actor；用距离失效阈值的平滑近似衰减掉笔后的想象回报。
-4. 定期在真实 MuJoCo 中评估，分别保存直接参考角度回放与学习策略的结果。
+2. 用8步自回归监督学习拟合57维特权状态的显式积分世界模型，同时训练终止头。
+3. 冻结WM/Critic参数，从真实回放初态通过32步BPTT更新Actor，含末端价值自举；再用GAE目标拟合Critic。
+4. 并行采集记录真实回报，独立CPU评估从首帧比较参考角回放与学习策略。
 
 Actor 是历史 MLP，输出参考关节角上最多 ±0.15 rad 的残差；每控制周期目标变化最多 0.12 rad，
 并使用 URDF 关节限位。环境执行同样的限幅，回放保存实际执行目标。
 自由笔只在 reset 初始化，step 中不瞬移回参考位置；结束状态与下一次 reset 不拼成训练转移。
 
-这是 SuperMimic 的“世界模型 + 可微想象优化”路线的独立最小实现，**不是完整 G1 训练器的等价移植**：
-目前使用 CPU MuJoCo 单环境采集，可选 CUDA 训练网络；默认想象窗口 8 步，没有 critic bootstrap、
-并行 Warp 接触采集、学习接触头或在线域适应。先验证单段能否取得真实动力学收益，再扩大系统。
+现已保留完整SuperMimic训练机制并适配Prima1：Warp并行接触采集、学习终止、Actor/Critic、
+GAE自举、序列回放与UTD调度。具体配置和后端验证边界见 [4096环境训练说明](PRIMA1_SUPERMIMIC_4096.md)。
+没有学习接触头或在线域适应，不能把仿真训练启动理解为已学会转笔或已完成真机验证。
 
 ### 奖励
 
@@ -73,8 +80,8 @@ MuJoCo 会计算真实碰撞约束并限制执行器力矩，但这不能代替�
 `completed_without_drop` 只表示未触发该距离阈值，不自动证明准确完成转笔。
 平均每步奖励可能因早停而虚高，必须同时看累计回报、存活时长和轨迹。
 
-世界模型另有独立噪声采集的验证数据及不跨 reset 的多步开环笔位置误差；它们仍来自同一片段，
-不是独立任务泛化测试。若开环误差已经接近笔半径（7.5 mm）甚至厘米级，不应仅因想象回报上涨就扩大时域。
+训练日志的nse1/nseK来自回放训练窗口，不是独立测试集成绩。还需结合真实仿真首帧跟踪和
+额外收集的轨迹判断WM误差，不能仅因想象回报上涨就认定控制改善。
 
 ## 4. 在 WSL 里运行
 
@@ -90,39 +97,43 @@ PY=/root/.venvs/supermimic-hand/bin/python
 $PY -m pytest tests/test_hand.py -q
 
 # 先做一个有界的 hold 实验：固定首帧参考，最长 2 秒
-$PY -m supermimic.hand.train train --stage hold \
-  --output runs/hand/hold-001 --iterations 20 --device cpu
+$PY -m supermimic.scripts.run prima1_pen_spin train --stage hold \
+  --output runs/hand/hold-001 --iterations 200 --num-envs 64 --device cuda:0
 
 # 查看持笔结果；成功后再进入前 1 秒动态片段
-$PY -m supermimic.hand.train evaluate --stage hold \
+$PY -m supermimic.scripts.run prima1_pen_spin evaluate --stage hold \
   --checkpoint runs/hand/hold-001/checkpoint.pt --output runs/hand/hold-eval
 
-$PY -m supermimic.hand.train train --stage short \
+$PY -m supermimic.scripts.run prima1_pen_spin train --stage short \
   --initialize runs/hand/hold-001/checkpoint.pt \
-  --output runs/hand/short-001 --iterations 100 --device cuda
+  --output runs/hand/short-001 --iterations 200 --num-envs 64 --device cuda:0
 
 # 前 1 秒稳定后再尝试完整 7.36 秒，不能直接把短片成功外推到全片
-$PY -m supermimic.hand.train train --stage full \
+$PY -m supermimic.scripts.run prima1_pen_spin train --stage full \
   --initialize runs/hand/short-001/checkpoint.pt \
-  --output runs/hand/full-001 --iterations 100 --device cuda
+  --output runs/hand/full-001 --iterations 200 --num-envs 64 --device cuda:0
 
-$PY -m supermimic.hand.train evaluate --stage full \
+$PY -m supermimic.scripts.run prima1_pen_spin evaluate --stage full \
   --checkpoint runs/hand/full-001/checkpoint.pt --output runs/hand/full-eval
 ```
 
 这些命令是顺序实验阶段，**不是建议不看结果一次运行完**。hold 不稳定时先检查可达抓握、接触和临时驱动参数。
-`--initialize` 用于跨阶段初始化网络；`--resume` 恢复同阶段网络、优化器、回放和随机数状态，
-`--iterations` 表示此次追加次数。输出目录已有 checkpoint 时，必须显式 resume 或换目录。
-`--random-start` 允许在当前阶段的参考帧随机初始化，默认为关闭；正式评估始终从首帧启动，防止随机重置掩盖失败。
-G1 占 GPU 时先使用 CPU，不同时启动两项长训练。
+`--initialize`加载兼容Actor开启新实验；`--resume`恢复网络、优化器和采样统计，然后重新填充回放。
+`--iterations`是总环境迭代上限。输出已有checkpoint时，必须显式resume或换目录。
+`--sampling return/uniform/start`选择起点采样方式；正式CPU评估始终从首帧启动。
+训练需要CUDA GPU，CPU用于独立物理评估。
 
 每个输出目录有：
 
 - `checkpoint.pt`：训练状态，**仅加载可信本地文件**。
-- `metrics.jsonl`：每轮真实评估、训练与验证损失、世界模型多步位置误差。
-- `baseline.json/.npz`、`evaluation.json/.npz`：指标和自由笔真实物理轨迹，状态排列见 `env.py`。
+- `metrics.jsonl`：并行真实回报、失败次数、WM误差、Actor/Critic更新指标。
+- `evaluation.json/.npz`：独立evaluate命令产生的指标和自由笔轨迹，状态排列见`envs/env.py`。
 - `provenance.json`：哈希、人工验收范围及参数校准状态。
+- `task_config.json`：完整奖励函数、权重、参数、时间缩放及终止配置；评估还记录各项原始均值、加权均值和累计贡献。
 - `actor.ts`、`joint_reference.npz`、`actor_schema.json`：离线推理包，不是可直接上机的 SDK 程序。
+
+新检查点保存任务配置；奖励/终止配置改变后拒绝 `--resume`，应使用 `--initialize` 建立新实验。
+重构前的旧检查点缺少此配置记录，也使用 `--initialize`，不能直接作为已验证的同任务续训。
 
 ## 5. 本次实测与尚未解决的部分
 
@@ -169,7 +180,7 @@ hold 的 4 步世界模型验证位置误差约 14.3 mm，说明模型仍很粗�
 
 ## 7. 到 Prima1 真机还缺什么
 
-`supermimic.hand.deployment.OfflineController` 已提供**只返回目标、不发硬件命令**的推理接口。
+`supermimic.tasks.pen_spin.deployment.controller.OfflineController` 已提供**只返回目标、不发硬件命令**的推理接口。
 要求显式填写每个 URDF 关节对应的 SDK 名称、方向/单位换算和零点；拒绝用猜测的关节索引控制手。
 它检查首帧姿态、反馈数值/限位和时间戳，片段结束或反馈异常后停止生成新命令。
 若调用本身完全中断，Python 接口无法主动停车，实际集成必须由 SDK/独立线程提供看门狗。

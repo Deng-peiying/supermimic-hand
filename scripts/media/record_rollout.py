@@ -26,10 +26,10 @@ import numpy as np
 import torch
 import tyro
 
-from supermimic.envs import SuperMimicEnvCfgArgs, make_env
-from supermimic.envs.mdp.motion_library import discover_npz
-from supermimic.envs.state_io import NQ, StateIO
-from supermimic.eval.benchmark import load_policy_from_checkpoint
+from supermimic.tasks.motion_tracking.envs import SuperMimicEnvCfgArgs, make_env
+from supermimic.tasks.motion_tracking.envs.mdp.motion_library import discover_npz
+from supermimic.tasks.motion_tracking.envs.state_io import NQ, StateIO
+from supermimic.tasks.motion_tracking.eval.benchmark import load_policy_from_checkpoint
 
 
 @torch.no_grad()

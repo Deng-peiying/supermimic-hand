@@ -26,7 +26,7 @@ import torch
 import tyro
 from tqdm import tqdm
 
-from supermimic.envs.mdp.motion_library import discover_npz
+from supermimic.tasks.motion_tracking.envs.mdp.motion_library import discover_npz
 
 
 def main(npz_dir: Path, out: Path, manifest: Path | None = None, workers: int = 16) -> None:

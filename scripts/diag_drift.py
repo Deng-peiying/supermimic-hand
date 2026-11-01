@@ -20,9 +20,9 @@ import torch
 import tyro
 from mjlab.utils.lab_api.math import quat_apply, quat_inv, quat_mul, wrap_to_pi, yaw_quat
 
-from supermimic.envs import SuperMimicEnvCfgArgs, make_env
-from supermimic.envs.mdp.motion_library import discover_npz
-from supermimic.eval.benchmark import load_policy_from_checkpoint
+from supermimic.tasks.motion_tracking.envs import SuperMimicEnvCfgArgs, make_env
+from supermimic.tasks.motion_tracking.envs.mdp.motion_library import discover_npz
+from supermimic.tasks.motion_tracking.eval.benchmark import load_policy_from_checkpoint
 
 
 def _yaw(q: torch.Tensor) -> torch.Tensor:

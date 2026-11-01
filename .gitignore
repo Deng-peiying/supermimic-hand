@@ -13,4 +13,5 @@ wandb/
 .pytest_cache/
 .ruff_cache/
 /runs/
+/laji/
 experiments/**/outputs/
