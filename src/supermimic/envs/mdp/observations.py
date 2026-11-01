@@ -11,6 +11,6 @@ if TYPE_CHECKING:
 
 
 def goal_future_frames(env: ManagerBasedRlEnv, command_name: str) -> torch.Tensor:
-    """(N, K*68) future reference-frame features (plan D5)."""
-    command = cast(MultiClipMotionCommand, env.command_manager.get_term(command_name))
-    return command.goal
+    """返回未来K帧参考运动特征，形状为(N, K×68)，D5方案。"""
+    command = cast(MultiClipMotionCommand, env.command_manager.get_term(command_name))  # 获取运动指令并标注类型
+    return command.goal  # 返回未来参考运动特征

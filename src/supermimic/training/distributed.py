@@ -1,12 +1,12 @@
-"""Data-parallel training helpers (plan D13 / 6.3).
-
-Launch with torchrun, one process per GPU:
+"""数据并行训练辅助工具（计划 D13 / 6.3）。
+使用 torchrun 启动，每张 GPU 对应一个独立进程：
   torchrun --nproc_per_node 4 -m supermimic.scripts.train --run-name e5_ws ...
-
-Each rank owns its own simulator (num_envs envs), replay buffer and sampler; the
-world model / policy / critic are replicated and their gradients are averaged with
-an explicit all-reduce after backward (no DDP wrapper, so torch.compile'd functions
-stay untouched). Learning rates are scaled by sqrt(world_size) (paper: x sqrt(2) for 2 GPUs).
+每个进程（rank）独立拥有自己的仿真器（包含 num_envs 个并行环境）、经验回放缓冲区（replay buffer）和采样器（sampler）。
+世界模型（world model）、策略网络（policy）和价值评估网络（critic）在各个进程中分别维护一份副本。
+在反向传播（backward）之后，通过显式的 all-reduce 操作对各进程的梯度进行聚合并求平均。
+不使用 DDP（DistributedDataParallel）封装器，因此不会影响已经通过 torch.compile 编译的函数。
+学习率按照 sqrt(world_size) 进行缩放。
+论文中的设置：使用 2 张 GPU 时，学习率乘以 sqrt(2)。
 """
 
 from __future__ import annotations
@@ -22,20 +22,20 @@ def is_distributed() -> bool:
 
 
 def init_distributed() -> tuple[int, int, int]:
-    """Returns (rank, local_rank, world_size); initialises NCCL when launched by torchrun."""
-    if not is_distributed():
-        return 0, 0, 1
-    rank = int(os.environ["RANK"])
-    world = int(os.environ["WORLD_SIZE"])
-    pinned = os.environ.get("SM_GPU_PINNED") == "1"  # scripts/train.py set CUDA_VISIBLE_DEVICES=LOCAL_RANK
-    # Pinned: each process sees exactly one GPU (cuda:0). Otherwise modulo lets a 1-GPU box smoke-test.
+    """返回全局进程编号、本地进程编号、总进程数；通过 torchrun 启动时初始化 NCCL。"""
+    if not is_distributed(): # 非分布式模式
+        return 0, 0, 1 # 单进程：rank=0，local_rank=0，world_size=1
+    rank = int(os.environ["RANK"]) # 获取全局进程编号
+    world = int(os.environ["WORLD_SIZE"]) # 获取总进程数
+    pinned = os.environ.get("SM_GPU_PINNED") == "1"  # 检查是否已在 train.py 中绑定 GPU
+    # 已绑定时每个进程只看到一张 GPU（cuda:0）；否则取模以支持单 GPU 冒烟测试
     local_rank = 0 if pinned else int(os.environ["LOCAL_RANK"]) % max(torch.cuda.device_count(), 1)
     torch.cuda.set_device(local_rank)
-    # NCCL cannot share one GPU between ranks; fall back to gloo for single-GPU smoke tests.
+    # NCCL 不支持多个进程共享同一张 GPU；单 GPU 多进程测试回退到 Gloo
     one_gpu_per_rank = pinned or torch.cuda.device_count() >= world
     backend = os.environ.get("SM_DIST_BACKEND") or ("nccl" if one_gpu_per_rank else "gloo")
-    dist.init_process_group(backend, rank=rank, world_size=world)
-    return rank, local_rank, world
+    dist.init_process_group(backend, rank=rank, world_size=world) # 初始化分布式通信组 
+    return rank, local_rank, world # 返回进程信息
 
 
 def world_size() -> int:

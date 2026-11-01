@@ -17,24 +17,24 @@ from supermimic.world_model.world_model import WorldModel
 
 @dataclass
 class PolicyTrainerCfg:
-    horizon: int = 32
-    batch_size: int = 4096
-    history: int = 10
-    future_frames: int = 10
-    gamma: float = 0.99
-    gae_lambda: float = 0.95
-    lr: float = 2e-4
-    betas: tuple[float, float] = (0.9, 0.95)
-    grad_clip_norm: float = 1.0
-    grad_clip_value: float = 0.1
-    critic_lr: float = 2e-4
-    critic_grad_clip: float = 1.0
-    critic_epochs: int = 5
-    critic_minibatches: int = 4
-    use_critic: bool = True
-    obs_noise: bool = True
-    compile: str | None = "default"
-    anchor_obs: bool = False  # None | "default" | "reduce-overhead" | "max-autotune-no-cudagraphs"
+    horizon: int = 32  # 世界模型想象轨迹长度
+    batch_size: int = 4096  # 策略训练批次大小
+    history: int = 10  # 历史观测步数
+    future_frames: int = 10  # 未来参考帧数
+    gamma: float = 0.99  # 奖励折扣因子
+    gae_lambda: float = 0.95  # GAE优势估计系数
+    lr: float = 2e-4  # 策略学习率
+    betas: tuple[float, float] = (0.9, 0.95)  # Adam优化器动量系数
+    grad_clip_norm: float = 1.0  # 梯度范数裁剪阈值
+    grad_clip_value: float = 0.1  # 梯度元素裁剪阈值
+    critic_lr: float = 2e-4  # Critic学习率
+    critic_grad_clip: float = 1.0  # Critic梯度裁剪阈值
+    critic_epochs: int = 5  # Critic每轮训练次数
+    critic_minibatches: int = 4  # Critic小批次数
+    use_critic: bool = True  # 启用价值网络
+    obs_noise: bool = True  # 启用观测噪声
+    compile: str | None = "default"  # 编译模式，None表示关闭
+    anchor_obs: bool = False  # None | "default" | "reduce-overhead" | "max-autotune-no-cudagraphs" compile 的可选值
 
 
 class PolicyTrainer:

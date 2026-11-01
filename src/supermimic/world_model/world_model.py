@@ -15,27 +15,26 @@ from supermimic.world_model.state_spec import StateSpec, StateSpecCfg
 
 @dataclass
 class WorldModelCfg:
-    hidden: tuple[int, ...] = (2048, 2048, 2048)
-    term_hidden: tuple[int, ...] = (64, 64)
-    state_spec: StateSpecCfg = field(default_factory=StateSpecCfg)
-    term_loss_weight: float = 1.0
-    height_threshold: float = 0.25
-    tilt_threshold: float = 0.8
+    hidden: tuple[int, ...] = (2048, 2048, 2048)  # 动力学网络隐藏层维度
+    term_hidden: tuple[int, ...] = (64, 64)  # 终止预测网络隐藏层维度
+    state_spec: StateSpecCfg = field(default_factory=StateSpecCfg)  # 状态表示配置
+    term_loss_weight: float = 1.0  # 终止预测损失权重
+    height_threshold: float = 0.25  # 高度终止阈值（米）
+    tilt_threshold: float = 0.8  # 倾斜终止阈值（单位需核实）
 
 
 class TerminationHead(nn.Module):
-    """P(terminal | state, reference). Input: analytic termination features and their magnitudes."""
+    """预测状态与参考运动下的终止概率，输入为解析终止特征及其误差幅值。"""
 
     def __init__(self, hidden=(64, 64), height_thr: float = 0.25, tilt_thr: float = 0.8):
-        super().__init__()
-        self.mlp = MLP(4, tuple(hidden), 1)
-        self.register_buffer("scale", torch.tensor([1.0 / height_thr, 1.0 / tilt_thr]))
+        super().__init__()  # 初始化父类
+        self.mlp = MLP(4, tuple(hidden), 1)  # 4维输入，两层隐藏层，1维输出
+        self.register_buffer("scale", torch.tensor([1.0 / height_thr, 1.0 / tilt_thr]))  # 注册误差归一化系数
 
     def forward(self, feats: torch.Tensor) -> torch.Tensor:
-        """feats (…, 2) = [height error, tilt error] -> logits (…,)"""
-        x = feats * self.scale
-        return self.mlp(torch.cat([x, x.abs()], dim=-1)).squeeze(-1)
-
+        """输入(...,2)：[高度误差、倾斜误差]；输出(...,)：终止logit。"""
+        x = feats * self.scale  # 按终止阈值归一化误差
+        return self.mlp(torch.cat([x, x.abs()], dim=-1)).squeeze(-1)  # 拼接误差及绝对值，预测终止logit
 
 class WorldModel(nn.Module):
     def __init__(self, cfg: WorldModelCfg, heads: AnalyticHeads, device):

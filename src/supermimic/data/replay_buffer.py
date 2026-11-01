@@ -120,20 +120,20 @@ class ReplayBuffer:
         idx = torch.multinomial(flat.float(), n, replacement=True)
         return idx // self.T, idx % self.T
 
-    @torch.no_grad()
-    def sample_windows(self, n: int, k: int) -> WindowBatch:
-        e, t = self._sample_from_mask(self.window_mask(k), n)
-        offs = torch.arange(k + 1, device=self.device)
-        tt = (t[None, :] + offs[:, None]) % self.T  # (k+1, n)
-        ee = e[None, :].expand(k + 1, n)
-        return WindowBatch(
-            states=self.s[ee, tt],
-            a_exec=self.a_exec[ee[:-1], tt[:-1]],
-            a_clean=self.a[ee[:-1], tt[:-1]],
-            xi=self.xi[e, t],
-            reward=self.r[ee[:-1], tt[:-1]],
-            done=self.done[ee[1:], tt[1:]],
-            frame=self.frame[ee[:-1], tt[:-1]],
+    @torch.no_grad()  # 禁用梯度计算
+    def sample_windows(self, n: int, k: int) -> WindowBatch:  # 采样n条长度为k的时间窗口
+        e, t = self._sample_from_mask(self.window_mask(k), n)  # 采样环境索引和起始时间索引
+        offs = torch.arange(k + 1, device=self.device)  # 生成时间偏移量[0,1,...,k]
+        tt = (t[None, :] + offs[:, None]) % self.T  # 生成窗口时间索引，形状(k+1,n)
+        ee = e[None, :].expand(k + 1, n)  # 扩展环境索引，形状(k+1,n)
+        return WindowBatch(  # 返回采样得到的序列数据
+            states=self.s[ee, tt],  # 状态序列，k+1帧
+            a_exec=self.a_exec[ee[:-1], tt[:-1]],  # 实际执行动作，k帧
+            a_clean=self.a[ee[:-1], tt[:-1]],  # 未加噪声的动作，k帧
+            xi=self.xi[e, t],  # 窗口起始时的物理参数
+            reward=self.r[ee[:-1], tt[:-1]],  # 奖励序列，k帧
+            done=self.done[ee[1:], tt[1:]],  # 下一状态的终止标志，k帧
+            frame=self.frame[ee[:-1], tt[:-1]],  # 参考动作帧索引，k帧
         )
 
     @torch.no_grad()

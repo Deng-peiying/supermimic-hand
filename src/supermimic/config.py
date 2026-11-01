@@ -10,7 +10,7 @@ from supermimic.world_model.wm_trainer import WMTrainerCfg
 from supermimic.world_model.world_model import WorldModelCfg
 
 
-@dataclass
+@dataclass # 管“仿真环境怎么运行”
 class DataCfg:
     npz_dir: Path = Path("data/npz/lafan1")  # NPZ 动作数据目录
     clips: list[str] | None = None  # 指定动作片段；None 表示全部
@@ -18,7 +18,7 @@ class DataCfg:
     manifest: Path | None = None  # 筛选清单 CSV，包含 name、keep 字段
     library: Path | None = None  # 预打包的 .pt 动作库，优先于 npz_dir
 
-@dataclass
+@dataclass 
 class EnvCfg:
     num_envs: int = 4096  # 并行仿真环境数量
     episode_length_s: float = 10.0  # 单回合最大时长（秒）
@@ -34,7 +34,7 @@ class EnvCfg:
 
 
 
-@dataclass
+@dataclass # 管“训练过程怎么安排”
 class ScheduleCfg:
     total_iterations: int = 320_000  # 总环境交互步数（D12 方案 A）
     updates_per_env_step: float = 0.4  # UTD：每环境步的更新次数
@@ -47,18 +47,22 @@ class ScheduleCfg:
     max_hours: float | None = None  # 最长训练时间（小时）；None 不限制
 
 
-@dataclass
+@dataclass # tyro 可以根据 Python 的 dataclass 自动生成命令行参数接口。
+# field() 用于配置 dataclass 中某个字段的初始化行为。
+# data: DataCfg = field(default_factory=DataCfg),表示 data 的默认值需要通过调用 DataCfg() 来创建
+# default=...：直接使用一个默认值。
+# default_factory=...：每次创建实例时，调用指定函数生成一个新的默认值
 class TrainConfig:
-    run_name: str = "debug"
-    log_root: Path = Path("logs")
-    seed: int = 0
-    device: str = "cuda:0"
-    data: DataCfg = field(default_factory=DataCfg)
-    env: EnvCfg = field(default_factory=EnvCfg)
-    world_model: WorldModelCfg = field(default_factory=WorldModelCfg)
-    wm_trainer: WMTrainerCfg = field(default_factory=WMTrainerCfg)
-    policy: PolicyCfg = field(default_factory=PolicyCfg)
-    critic: CriticCfg = field(default_factory=CriticCfg)
-    policy_trainer: PolicyTrainerCfg = field(default_factory=PolicyTrainerCfg)
-    schedule: ScheduleCfg = field(default_factory=ScheduleCfg)
-    resume: Path | None = None
+    run_name: str = "debug"  # 实验名称
+    log_root: Path = Path("logs")  # 日志目录,相对路径
+    seed: int = 0  # 随机种子
+    device: str = "cuda:0"  # 计算设备
+    data: DataCfg = field(default_factory=DataCfg)  # 数据配置
+    env: EnvCfg = field(default_factory=EnvCfg)  # 仿真环境配置
+    world_model: WorldModelCfg = field(default_factory=WorldModelCfg)  # 世界模型结构 src\supermimic\world_model\world_model.py
+    wm_trainer: WMTrainerCfg = field(default_factory=WMTrainerCfg)  # 世界模型训练配置 src\supermimic\world_model\wm_trainer.py
+    policy: PolicyCfg = field(default_factory=PolicyCfg)  # 策略网络结构 src\supermimic\policy\nets.py
+    critic: CriticCfg = field(default_factory=CriticCfg)  # 价值网络结构 src\supermimic\policy\nets.py
+    policy_trainer: PolicyTrainerCfg = field(default_factory=PolicyTrainerCfg)  # 策略训练配置 src\supermimic\imagination\policy_trainer.py
+    schedule: ScheduleCfg = field(default_factory=ScheduleCfg)  # 训练调度
+    resume: Path | None = None  # 恢复训练的检查点

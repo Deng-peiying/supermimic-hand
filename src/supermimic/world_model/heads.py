@@ -1,10 +1,12 @@
-"""Analytic heads of the world model (plan D4): observation, reward, termination.
+"""世界模型的解析计算模块（D4方案）：观测、奖励和终止条件。
 
-Everything here is a pure differentiable function of the 71-d simulator state
-``s = [qpos(36) | qvel(35)]`` (root position expressed relative to the env origin,
-see ``StateIO``), the previous clean action, the sim context ``xi`` and the
-reference frame, so the same code serves the simulator-side tests and the
-imagined rollouts.
+本模块中的计算均为纯可微函数，输入包括：
+- 71维仿真状态 s = [qpos(36) | qvel(35)]；
+  根部位置相对于环境原点表示，详见 StateIO。
+- 上一步未加噪声的动作。
+- 仿真物理参数 xi。
+- 参考运动帧。
+因此，同一套计算代码既可用于仿真器侧测试，也可用于世界模型的想象轨迹。
 """
 
 from __future__ import annotations
@@ -67,14 +69,14 @@ def flatten_history_term_major(hist: torch.Tensor) -> torch.Tensor:
 
 @dataclass
 class ReferenceFrame:
-    """Reference quantities of one target frame for a batch (N, ·)."""
+    """一批样本（N）的单帧参考运动数据。"""
 
-    body_pos_w: torch.Tensor  # (N, B, 3)
-    body_quat_w: torch.Tensor  # (N, B, 4)
-    body_lin_vel_w: torch.Tensor  # (N, B, 3)
-    body_ang_vel_w: torch.Tensor  # (N, B, 3)
-    root_pos_w: torch.Tensor  # (N, 3)
-    root_quat_w: torch.Tensor  # (N, 4)
+    body_pos_w: torch.Tensor  # (N, B, 3) 各身体部位的世界坐标位置
+    body_quat_w: torch.Tensor  # (N, B, 4) 各身体部位的世界坐标姿态（四元数）
+    body_lin_vel_w: torch.Tensor  # (N, B, 3) 各身体部位的世界坐标线速度
+    body_ang_vel_w: torch.Tensor  # (N, B, 3) 各身体部位的世界坐标角速度
+    root_pos_w: torch.Tensor  # (N, 3) 根部的世界坐标位置
+    root_quat_w: torch.Tensor  # (N, 4) 根部的世界坐标姿态（四元数）
 
 
 class AnalyticHeads:

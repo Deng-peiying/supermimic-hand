@@ -8,35 +8,35 @@ import os
 
 # 在 torchrun 分布式启动模式下，必须在 CUDA/Warp 初始化之前，将每个进程（rank）固定到各自的 GPU。
 # 原因：MuJoCo Warp 和 mjlab 的仿真始终运行在当前进程可见的第一块 GPU 上，
-# 因此仅设置 cfg.device 并不足以保证每个进程使用正确的 GPU。
-# 如果机器上的 GPU 数量少于进程数量，则跳过 GPU 独占绑定。
-# 例如，在单 GPU 冒烟测试中，多个进程可以通过 gloo 后端共享 cuda:0
+
 def _n_gpus() -> int:
     try:
-        return len(os.listdir("/proc/driver/nvidia/gpus"))
+        return len(os.listdir("/proc/driver/nvidia/gpus")) # 如果读取 Linux 目录时发生特定的操作系统错误，就交给 except 处理
     except OSError:
         return 0
 
 
-# 如果预先设置了 CUDA_VISIBLE_DEVICES，例如 "0,2,3"（跳过故障 GPU），
-# 则根据 LOCAL_RANK 从该列表中选择对应的 GPU。
-_preset = [d for d in os.environ.get("CUDA_VISIBLE_DEVICES", "").split(",") if d]
-_avail = _preset if _preset else [str(i) for i in range(_n_gpus())]
+_preset = [d for d in os.environ.get("CUDA_VISIBLE_DEVICES", "").split(",") if d] #读取环境变量 CUDA_VISIBLE_DEVICES
+_avail = _preset if _preset else [str(i) for i in range(_n_gpus())] # 确定可用 GPU 列表
 if "LOCAL_RANK" in os.environ and int(os.environ.get("LOCAL_WORLD_SIZE", "1")) <= len(_avail) and (not _preset or len(_preset) > 1):
-    os.environ["CUDA_VISIBLE_DEVICES"] = _avail[int(os.environ["LOCAL_RANK"])]
-    os.environ["SM_GPU_PINNED"] = "1"
+    # 判断是否需要 GPU 绑定
+    # "LOCAL_RANK" in os.environ	当前是否存在本地进程编号
+    # LOCAL_WORLD_SIZE <= len(_avail)	当前机器上的本地进程数量不超过候选 GPU 数量
+    # not _preset or len(_preset) > 1	没有预设 GPU，或者预设了多张 GPU
+    os.environ["CUDA_VISIBLE_DEVICES"] = _avail[int(os.environ["LOCAL_RANK"])] 
+    os.environ["SM_GPU_PINNED"] = "1" # 设置 GPU 绑定标记
     # 为每个进程分配独立的一组 CPU 核心。 
     # 原因：训练循环在 CPU 端主要受单线程性能限制。
     # 如果多个进程共享 CPU 核心，会产生执行时间抖动（jitter）。
     # 而分布式训练中的同步 All-Reduce 操作会把这种抖动转化为等待时间，
     # 从而降低整体训练效率。
     try:
-        cores = sorted(os.sched_getaffinity(0))
+        cores = sorted(os.sched_getaffinity(0)) # 获取当前进程允许使用的 CPU 核心，os.sched_getaffinity(0) 返回当前进程被允许在哪些逻辑 CPU 上执行
         n_local = int(os.environ["LOCAL_WORLD_SIZE"])
-        per = len(cores) // n_local
-        if per >= 2:
-            r = int(os.environ["LOCAL_RANK"])
-            os.sched_setaffinity(0, set(cores[r * per : (r + 1) * per]))
+        per = len(cores) // n_local # 计算每个进程分配多少 CPU 核心
+        if per >= 2: # 判断是否具有足够的 CPU 核心
+            r = int(os.environ["LOCAL_RANK"]) # 获取当前进程编号
+            os.sched_setaffinity(0, set(cores[r * per : (r + 1) * per]))  # 真正进行 CPU 绑定
     except (OSError, ValueError):
         pass
 
@@ -46,10 +46,10 @@ from supermimic.config import TrainConfig
 
 
 def main() -> None:
-    cfg = tyro.cli(TrainConfig)
-    from supermimic.training.loop import Trainer
+    cfg = tyro.cli(TrainConfig) # 解析训练配置，tyro 可以根据 Python 的 dataclass 自动生成命令行参数接口 -> cfg.seed
+    from supermimic.training.loop import Trainer # 导入训练器
 
-    Trainer(cfg).run()
+    Trainer(cfg).run() # 创建训练器并执行训练
 
 
 if __name__ == "__main__":

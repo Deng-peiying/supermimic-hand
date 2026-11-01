@@ -43,20 +43,19 @@ DELTA_DIM = 70
 NJ = 29
 
 
-@dataclass
+@dataclass # 规定世界模型如何理解、处理和预测机器人的物理状态
 class StateSpecCfg:
-    dt: float = 0.02
-    # Nominal error scales (D3) for [root pos m, root rotvec rad, root lin vel m/s, root ang vel rad/s, joint pos rad, joint vel rad/s].
+    dt: float = 0.02  # 时间步长（秒）
+    # 状态误差尺度（D3）：[根位置(m)、根旋转向量(rad)、根线速度(m/s)、根角速度(rad/s)、关节位置(rad)、关节速度(rad/s)]
     err_scale: tuple[float, ...] = (0.05, 0.1, 0.5, 1.0, 0.1, 2.0)
-    # Output scales of the dynamics head for [dv_h, dw_b, dqd, dp_h, dth_b, dq].
+    # 动力学预测输出尺度(将网络预测量还原为物理增量)：[水平线速度增量、机体系角速度增量、关节速度增量、水平位置增量、机体系旋转增量、关节位置增量]
     out_scale: tuple[float, ...] = (0.3, 0.5, 2.0, 0.01, 0.02, 0.02)
-    # Input feature scales for [root_z, rot6d, lin_vel_h, ang_vel_b, joint_pos, joint_vel] (divide by these).
+    # 输入特征缩放除数(对输入特征进行数值缩放)：[根高度、6D旋转、水平线速度、机体系角速度、关节位置、关节速度]
     in_scale: tuple[float, ...] = (1.0, 1.0, 1.0, 2.0, 1.0, 5.0)
-    explicit_integration: bool = True
-    # xi normalisation: (offset, scale) for friction, encoder bias, com offset.
-    xi_offset: tuple[float, ...] = field(default_factory=lambda: (0.75,) + (0.0,) * 29 + (0.0,) * 3)
-    xi_scale: tuple[float, ...] = field(default_factory=lambda: (0.45,) + (0.01,) * 29 + (0.05,) * 3)
-
+    explicit_integration: bool = True  # 启用显式积分
+    # 物理参数归一化：[摩擦系数、编码器偏差、质心偏移]
+    xi_offset: tuple[float, ...] = field(default_factory=lambda: (0.75,) + (0.0,) * 29 + (0.0,) * 3)  # 归一化偏移量
+    xi_scale: tuple[float, ...] = field(default_factory=lambda: (0.45,) + (0.01,) * 29 + (0.05,) * 3)  # 归一化尺度
 
 class StateSpec:
     def __init__(self, cfg: StateSpecCfg, device, dtype=torch.float32):

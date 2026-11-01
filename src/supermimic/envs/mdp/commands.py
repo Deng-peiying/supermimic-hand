@@ -394,33 +394,34 @@ class MultiClipMotionCommand(CommandTerm):
             visualizer.add_ghost_mesh(qpos, model=self._ghost_model, label=f"ghost_{e}")
 
 
-@dataclass(kw_only=True)
-class MultiClipMotionCommandCfg(CommandTermCfg):
-    npz_files: list[str]
-    anchor_body_name: str
-    root_body_name: str = "pelvis"
-    body_names: tuple[str, ...]
-    entity_name: str = "robot"
-    future_frames: int = 10
-    bin_frames: int = 50
-    pose_range: dict[str, tuple[float, float]] = field(default_factory=dict)
-    velocity_range: dict[str, tuple[float, float]] = field(default_factory=dict)
-    joint_position_range: tuple[float, float] = (0.0, 0.0)
-    sampling_mode: Literal["return", "uniform", "start"] = "return"
-    # Return-based sampling (plan D14).
-    uniform_ratio: float = 0.5
-    hard_ratio: float = 0.4
-    memory_ratio: float = 0.1
-    softmax_temp: float = 25.0
-    g_max: float = 10.0
-    gamma: float = 0.99
-    ema_alpha: float = 0.05
-    memory_alpha: float = 0.01
-    min_remaining_steps: int = 100
-    max_logged_steps: int = 1024
-    compact_library: bool = False
-    library_fp16: bool = True
-    resampling_time_range: tuple[float, float] = (1.0e9, 1.0e9)
+@dataclass(kw_only=True)  # 初始化参数必须使用关键字传入
+class MultiClipMotionCommandCfg(CommandTermCfg):  # 继承指令配置基类
+    npz_files: list[str]  # NPZ动作文件列表
+    anchor_body_name: str  # 锚定身体名称
+    root_body_name: str = "pelvis"  # 根部身体名称
+    body_names: tuple[str, ...]  # 跟踪身体名称集合
+    entity_name: str = "robot"  # 机器人实体名称
+    future_frames: int = 10  # 未来参考帧数
+    bin_frames: int = 50  # 每个采样区间的帧数
+    pose_range: dict[str, tuple[float, float]] = field(default_factory=dict)  # 重置位姿扰动范围
+    velocity_range: dict[str, tuple[float, float]] = field(default_factory=dict)  # 重置速度扰动范围
+    joint_position_range: tuple[float, float] = (0.0, 0.0)  # 关节位置扰动范围
+    sampling_mode: Literal["return", "uniform", "start"] = "return"  # 采样模式
 
-    def build(self, env: ManagerBasedRlEnv) -> MultiClipMotionCommand:
-        return MultiClipMotionCommand(self, env)
+    # 基于回报的采样（D14方案）
+    uniform_ratio: float = 0.5  # 均匀采样比例
+    hard_ratio: float = 0.4  # 困难区间采样比例
+    memory_ratio: float = 0.1  # 历史记忆采样比例
+    softmax_temp: float = 25.0  # Softmax采样温度
+    g_max: float = 10.0  # G值上限
+    gamma: float = 0.99  # 回报折扣因子
+    ema_alpha: float = 0.05  # 回报指数滑动平均系数
+    memory_alpha: float = 0.01  # 历史记忆更新系数
+    min_remaining_steps: int = 100  # 最小剩余动作步数
+    max_logged_steps: int = 1024  # 最大记录步数
+    compact_library: bool = False  # 紧凑动作库开关
+    library_fp16: bool = True  # 动作库使用FP16
+    resampling_time_range: tuple[float, float] = (1.0e9, 1.0e9)  # 指令重采样时间范围
+
+    def build(self, env: ManagerBasedRlEnv) -> MultiClipMotionCommand:  # 构建运动指令对象
+        return MultiClipMotionCommand(self, env)  # 传入配置与环境
