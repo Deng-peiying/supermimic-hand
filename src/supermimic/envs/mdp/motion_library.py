@@ -1,4 +1,4 @@
-"""Multi-clip motion library held as flat GPU tensors.
+"""Multi-clip motion library, with GPU storage or a CPU-mapped compact cache.
 
 All clips are concatenated along a single global frame axis.  A per-frame
 ``clip_id`` and per-clip ``start`` / ``length`` tables let a batch of
@@ -22,6 +22,7 @@ Goal features (per frame, 68-d, plan D5):
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -103,7 +104,29 @@ class MotionLibrary:
         ref_chunks: list[np.ndarray] = []
         body_chunks = {"pos": [], "quat": [], "lin": [], "ang": []}
         # A single packed cache (build_library.py) can stand in for the npz list (compact mode only).
-        if len(npz_files) == 1 and str(npz_files[0]).endswith(".pt"):
+        if len(npz_files) == 1 and str(npz_files[0]).endswith(".json"):
+            if not compact:
+                raise ValueError("Mapped library requires compact mode")
+            if store_dtype != torch.float16:
+                raise ValueError("Mapped library stores FP16; use library_fp16=True")
+            descriptor = Path(npz_files[0])
+            pack = json.loads(descriptor.read_text(encoding="utf-8"))
+            if pack.get("format") != "supermimic-mmap-v1":
+                raise ValueError("Unknown mapped library format")
+            reference = descriptor.parent / pack["reference"]
+            if reference.stat().st_size != pack["reference_bytes"]:
+                raise ValueError("Truncated mapped reference file")
+            mapped = np.load(reference, mmap_mode="c", allow_pickle=False)
+            if mapped.dtype != np.float16 or mapped.shape != (pack["frames"], REF_DIM):
+                raise ValueError("Invalid mapped reference shape/dtype")
+            clips = [ClipInfo(n, int(st), int(ln)) for n, st, ln in zip(pack["names"], pack["starts"], pack["lengths"], strict=True)]
+            if not clips or any(c.length <= 0 for c in clips) or [c.start for c in clips] != np.cumsum([0] + [c.length for c in clips[:-1]]).tolist() or sum(c.length for c in clips) != pack["frames"]:
+                raise ValueError("Invalid mapped clip boundaries")
+            # 操作系统缓存参考帧；只将当前采样批次传到训练设备。
+            self._ref = torch.from_numpy(mapped)
+            start = mapped.shape[0]
+            ref_chunks = None
+        elif len(npz_files) == 1 and str(npz_files[0]).endswith(".pt"):
             assert compact, "packed .pt libraries are compact-only"
             pack = torch.load(npz_files[0], map_location="cpu", weights_only=False)
             self._ref = pack["ref"].to(device=self.device, dtype=store_dtype)
@@ -139,7 +162,7 @@ class MotionLibrary:
             self._ref = torch.as_tensor(ref_np, device=self.device, dtype=store_dtype if compact else dtype)
             del ref_np, ref_chunks
         if not compact:
-            t = lambda arrs: torch.as_tensor(np.concatenate(arrs, 0), dtype=dtype, device=self.device)  # noqa: E731
+            t = lambda arrs: torch.as_tensor(np.concatenate(arrs, 0), dtype=dtype, device=self.device)
             self.body_pos_w = t(body_chunks["pos"])
             self.body_quat_w = t(body_chunks["quat"])
             self.body_lin_vel_w = t(body_chunks["lin"])
@@ -174,10 +197,11 @@ class MotionLibrary:
         return RefState(r[..., 0:3], r[..., 3:7], r[..., 7:36], r[..., 36:39], r[..., 39:42], r[..., 42:71])
 
     def ref(self, frame: torch.Tensor) -> RefState:
-        return self._split(self._ref[frame].to(self.dtype))
+        return self._split(self.ref71(frame))
 
     def ref71(self, frame: torch.Tensor) -> torch.Tensor:
-        return self._ref[frame].to(self.dtype)
+        index = frame.to(self._ref.device)
+        return self._ref[index].to(device=self.device, dtype=self.dtype)
 
     def bodies(self, frame: torch.Tensor) -> RefBodies:
         """Tracked-body link states (world) at the given frames."""
@@ -246,7 +270,7 @@ class MotionLibrary:
         mem = self._ref.numel() * self._ref.element_size() / 1e9
         if not self.compact:
             mem += sum(t.numel() * t.element_size() for t in (self.body_pos_w, self.body_quat_w, self.body_lin_vel_w, self.body_ang_vel_w, self.goal_feat)) / 1e9
-        return f"MotionLibrary({'compact' if self.compact else 'full'}): {self.num_clips} clips, {self.num_frames} frames ({hours:.3f} h @50Hz), {self.num_bins} bins, {mem:.2f} GB on {self.device}"
+        return f"MotionLibrary({'compact' if self.compact else 'full'}): {self.num_clips} clips, {self.num_frames} frames ({hours:.3f} h @50Hz), {self.num_bins} bins, {mem:.2f} GB on {self._ref.device}; compute on {self.device}"
 
 
 def discover_npz(directory: str | Path, limit: int | None = None, names: list[str] | None = None, manifest: str | Path | None = None) -> list[Path]:
