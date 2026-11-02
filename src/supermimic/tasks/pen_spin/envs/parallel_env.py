@@ -40,6 +40,12 @@ class ParallelHandEnv:
         self.action_noise = action_noise
         self.domain_randomization = domain_randomization
         self.ref = references(clip, stage, device)
+        if hasattr(clip, 'clips'):
+            self.reference_starts = torch.empty(len(clip.q), dtype=torch.long, device=device)
+            self.reference_ends = torch.empty_like(self.reference_starts)
+            for start, end in zip(clip.starts, clip.ends):
+                self.reference_starts[start:end+1] = int(start)
+                self.reference_ends[start:end+1] = int(end)
         self.model = clip.model()
         self.substeps = round(clip.dt / self.model.opt.timestep)
         if abs(self.substeps * self.model.opt.timestep - clip.dt) > 1e-8:
@@ -179,7 +185,8 @@ class ParallelHandEnv:
         ref = self.ref[self.frame]
         result = self.reward_manager.compute(RewardInputs(state, ref, target, prev))
         failed = (state[:, 44:47] - ref[:, 44:47]).norm(dim=-1) > self.cfg.drop_distance_m
-        ended = self.elapsed >= self.length if self.stage == "hold" else self.frame >= self.length
+        end = self.reference_ends[self.frame] if hasattr(self, 'reference_ends') else self.length
+        ended = self.elapsed >= self.length if self.stage == "hold" else self.frame >= end
         return state, result, failed, ended
 
     def check_capacity(self):

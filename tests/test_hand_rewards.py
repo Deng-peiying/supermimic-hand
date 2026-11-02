@@ -39,6 +39,12 @@ def test_refactor_preserves_reward_and_bptt_gradients():
     result = TensorRewardManager(cfg.rewards, dt=0.02, scale_by_dt=False).compute(
         RewardInputs(state, ref, target, previous)
     )
+    # 六项基线公式保持不变；第七项单独验证。
+    result = TensorRewardManager(
+        {k: v for k, v in cfg.rewards.items() if k != "pen_flip_velocity"},
+        dt=0.02,
+        scale_by_dt=False,
+    ).compute(RewardInputs(state, ref, target, previous))
     expected = original_reward(state, ref, target, previous)
     torch.testing.assert_close(result.total, expected)
     grads = torch.autograd.grad(result.total.sum(), (state, target), retain_graph=True)
@@ -58,7 +64,7 @@ def test_explicit_dt_scaling_and_config_changes():
     data = RewardInputs(state, state, zero, zero)
     plain = TensorRewardManager(cfg.rewards, dt=0.02, scale_by_dt=False).compute(data)
     scaled = TensorRewardManager(cfg.rewards, dt=0.02, scale_by_dt=True).compute(data)
-    torch.testing.assert_close(plain.total, torch.full((2,), 6.2))
+    torch.testing.assert_close(plain.total, torch.full((2,), 6.7))
     torch.testing.assert_close(scaled.total, plain.total * 0.02)
     # 每个配置单独构造；改权重不能污染其他实验。
     cfg.rewards["pen_position"].weight = 0
@@ -90,7 +96,7 @@ def test_physical_evaluation_term_totals(tmp_path):
         pytest.skip("需要本地人工验收的 Prima1 数据和资产")
     env = HandEnv(Clip(), "short")
     metrics = evaluate(env, Actor(env.limits), "cpu", tmp_path / "baseline", baseline=True)
-    assert len(metrics["reward_raw_mean"]) == 6
+    assert len(metrics["reward_raw_mean"]) == 7
     assert np.isclose(sum(metrics["reward_weighted_mean"].values()), metrics["mean_reward"])
     assert np.isclose(sum(metrics["reward_term_return"].values()), metrics["return"])
     assert (tmp_path / "task_config.json").exists()

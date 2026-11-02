@@ -12,14 +12,15 @@ import torch
 from supermimic.training.schedule import cosine_lr
 
 from ..data import Clip
+from ..data.collection import load_reference
 from ..data.replay import HandReplay
-from ..data.sampling import ReturnSampler
+from ..data.sampling import ReturnSampler, MultiClipSampler
 from ..deployment.export import export
 from ..envs.mdp.observations import HISTORY
 from ..envs.parallel_env import ParallelHandEnv
 from ..imagination.policy_trainer import PolicyTrainer
 from ..policy.nets import Actor, Critic
-from ..policy.reference import future_joint_reference
+from ..policy.reference import future_for_env, reference_phase
 from ..world_model.wm_trainer import WorldModelTrainer
 from ..world_model.world_model import WorldModel
 from .checkpoint import check_task_config
@@ -58,7 +59,7 @@ class Trainer:
         self.out.mkdir(parents=True, exist_ok=True)
         if (self.out / "checkpoint.pt").exists() and not cfg.resume:
             raise FileExistsError("已有检查点，请换输出目录或明确 resume")
-        self.clip = Clip(cfg.clip, cfg.asset)
+        self.clip = load_reference(cfg.clip, cfg.asset)
         self.env = ParallelHandEnv(
             self.clip,
             cfg.num_envs,
@@ -75,9 +76,10 @@ class Trainer:
             (cfg.wm_hidden,) * 3, self.clip.dt, drop_distance=self.env.cfg.drop_distance_m
         ).to(cfg.device)
         self.replay = HandReplay(cfg.num_envs, cfg.replay_capacity, cfg.device)
-        self.sampler = ReturnSampler(
+        sampler_type = MultiClipSampler if hasattr(self.clip, 'clips') else ReturnSampler
+        self.sampler = sampler_type(
             cfg.num_envs,
-            self.env.length,
+            self.clip if hasattr(self.clip, 'clips') else self.env.length,
             cfg.device,
             cfg.gamma,
             cfg.sampling,
@@ -192,8 +194,8 @@ class Trainer:
                 packed, frame, xi = env.packed_state(), env.frame.clone(), env.xi.clone()
                 action = self.actor(
                     env.history,
-                    future_joint_reference(env.ref[:, :22], frame, env.length, env.stage),
-                    frame[:, None].float() / env.length,
+                    future_for_env(env, frame),
+                    reference_phase(env, frame),
                 )
                 _, reward, failed, ended = env.step(action)
                 self.replay.record(

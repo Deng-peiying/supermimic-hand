@@ -29,10 +29,18 @@ def checked(path, expected):
 class Clip:
     def __init__(self, folder=DEFAULT_CLIP, asset=DEFAULT_ASSET):
         self.folder, self.asset = Path(folder), Path(asset)
-        checked(self.folder / "candidate.npz", CLIP_SHA)
         review = json.loads((self.folder / "review_status.json").read_text(encoding="utf-8"))
-        if review.get("candidate_sha256") != CLIP_SHA or not review.get("training_allowed"):
+        self.digest = sha(self.folder / "candidate.npz")
+        if review.get("candidate_sha256") != self.digest or not review.get("training_allowed"):
             raise ValueError("此候选没有与文件哈希绑定的训练许可")
+        if self.digest != CLIP_SHA:
+            validation = json.loads((self.folder / "validation.json").read_text(encoding="utf-8"))
+            numerical = json.loads((self.folder / "numerical_checks.json").read_text(encoding="utf-8"))
+            if validation['status'] != 'pending_user_review' or not numerical['passed']:
+                raise ValueError("批量候选没有通过自动检查")
+            if not review.get('human_geometry_accepted') or not review.get('authorization'):
+                raise ValueError("批量候选缺少人工验收和训练授权")
+        self.review = review
         manifest = json.loads((self.folder / "asset_manifest.json").read_text(encoding="utf-8"))
         checked(self.asset / "prima_left_after_1.1.urdf", manifest["asset_sha256"])
         checked(self.folder / "prima_left_review.xml", manifest["model_sha256"])
@@ -46,8 +54,10 @@ class Clip:
             if list(data["joint_names"].astype(str)) != JOINTS:
                 raise ValueError("关节顺序错误")
         self.dt = float(np.median(np.diff(times)))
-        if not np.allclose(np.diff(times), 0.02) or self.q.shape != (369, 22):
-            raise ValueError("仅支持审查过的 369 帧、50 Hz 片段")
+        if (len(times) < 2 or not np.allclose(np.diff(times), 0.02)
+                or self.q.shape != (len(times), 22) or self.qd.shape != self.q.shape
+                or self.pose.shape != (len(times), 7)):
+            raise ValueError("需要至少两帧、22关节、50 Hz且数组长度一致的已验收片段")
         if not all(np.isfinite(a).all() for a in (self.q, self.qd, self.pose)):
             raise ValueError("参考数据包含非有限数")
         if not np.allclose(np.linalg.norm(self.pose[:, 3:], axis=-1), 1, atol=1e-4):
@@ -68,8 +78,8 @@ class Clip:
         return mujoco.MjModel.from_xml_string(ET.tostring(root, encoding="unicode"))
 
     def provenance(self):
-        return {
-            "clip_sha256": CLIP_SHA,
+        result = {
+            "clip_sha256": self.digest,
             "asset_sha256": self.manifest["asset_sha256"],
             "model_sha256": self.manifest["model_sha256"],
             "joint_names": JOINTS,
@@ -82,3 +92,7 @@ class Clip:
             "quaternion": "wxyz",
             "side": "left",
         }
+        if self.digest != CLIP_SHA:
+            result['authorization'] = self.review['authorization']
+            result['scope'] = '已人工目测并授权的多片段几何参考实验；非物理或真机验收'
+        return result

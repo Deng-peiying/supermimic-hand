@@ -1,4 +1,4 @@
-"""全部六项转笔奖励的显式配置；无父任务奖励继承。"""
+"""六项基线奖励 + 翻转角速度跟踪；无父任务奖励继承。"""
 
 from supermimic.core.rewards import TensorRewardTermCfg
 
@@ -6,7 +6,7 @@ from .envs.mdp import rewards as mdp
 
 
 def pen_spin_rewards() -> dict[str, TensorRewardTermCfg]:
-    # 这就是全部 6 项奖励。新增、删除、调权重都在这里。
+    # 六项基线参数保持不变；第七项提供翻转方向与速度目标。
     terms = {
         "joint_position": TensorRewardTermCfg(
             func=mdp.joint_position_tracking_exp, weight=1.0, params={"std": 0.15}
@@ -23,6 +23,9 @@ def pen_spin_rewards() -> dict[str, TensorRewardTermCfg]:
         "pen_distance": TensorRewardTermCfg(func=mdp.pen_position_error_l2, weight=-20.0),
         "action_delta": TensorRewardTermCfg(
             func=mdp.action_delta_l2, weight=-0.02, params={"scale": 0.12}
+        ),
+        "pen_flip_velocity": TensorRewardTermCfg(
+            func=mdp.pen_flip_velocity_tracking, weight=0.5, params={"std": 3.0}
         ),
     }
 

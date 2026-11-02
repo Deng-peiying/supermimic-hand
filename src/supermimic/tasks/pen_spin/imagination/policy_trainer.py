@@ -8,6 +8,7 @@ from supermimic.algorithms.objective import discounted_return, gae_targets
 
 from ..envs.mdp.observations import HISTORY
 from .rollout import imagine
+from ..policy.reference import reference_phase
 
 
 class PolicyTrainer:
@@ -32,7 +33,7 @@ class PolicyTrainer:
                 ro.states[-1],
                 ro.histories[-1],
                 self.env.ref[last],
-                last[:, None].float() / self.env.length,
+                reference_phase(self.env, last),
                 start.xi,
             )
             objective = discounted_return(ro.rewards, ro.survival, cfg.gamma, bootstrap).mean()
@@ -57,7 +58,7 @@ class PolicyTrainer:
                 s.reshape(-1, 57),
                 history.reshape(-1, HISTORY, 66),
                 self.env.ref[frame.reshape(-1)],
-                frame.reshape(-1, 1).float() / self.env.length,
+                reference_phase(self.env, frame.reshape(-1)),
                 xi.reshape(-1, 2),
             )
             values = self.target_critic(*inputs).reshape(h, n)

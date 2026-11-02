@@ -7,7 +7,7 @@ import torch
 from ..data.replay import history_from_start
 from ..envs.mdp.observations import append_history
 from ..envs.mdp.rewards import RewardInputs
-from ..policy.reference import future_joint_reference
+from ..policy.reference import future_for_env, reference_end, reference_phase
 
 
 @dataclass
@@ -29,9 +29,9 @@ def imagine(wm, actor, env, start, horizon):
     survival = [torch.ones_like(frame, dtype=torch.float32)]
     for _ in range(horizon):
         active = (
-            (frame < env.length).float() if env.stage != "hold" else torch.ones_like(frame).float()
+            (frame < reference_end(env, frame)).float() if env.stage != "hold" else torch.ones_like(frame).float()
         )
-        nxt = frame if env.stage == "hold" else (frame + 1).clamp(max=env.length)
+        nxt = frame if env.stage == "hold" else torch.minimum(frame + 1, torch.as_tensor(reference_end(env, frame), device=frame.device))
         # 参考已经结束的样本不再向前预测。仅乘0不能消除NaN/Inf，
         # 也不应让终止后的任意状态进入Critic输入。
         live = active.bool()
@@ -40,8 +40,8 @@ def imagine(wm, actor, env, start, horizon):
         if live.any():
             action[live] = actor(
                 history[live],
-                future_joint_reference(env.ref[:, :22], frame[live], env.length, env.stage),
-                frame[live, None].float() / env.length,
+                future_for_env(env, frame[live]),
+                reference_phase(env, frame[live]),
             )
             prediction[live] = wm(s[live], action[live], start.xi[live])
         reward = env.reward_manager.compute(
@@ -49,7 +49,7 @@ def imagine(wm, actor, env, start, horizon):
         ).total
         done = torch.sigmoid(wm.termination_logits(prediction, env.ref[nxt]))
         if env.stage != "hold":
-            done = torch.where(nxt >= env.length, torch.ones_like(done), done)
+            done = torch.where(nxt >= reference_end(env, frame), torch.ones_like(done), done)
         rewards.append(reward * active)
         dhats.append(done)
         active_masks.append(active)

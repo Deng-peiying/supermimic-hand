@@ -63,3 +63,74 @@ class ReturnSampler:
         }
         self.count[ended] = 0
         return metrics
+
+
+class MultiClipSampler:
+    """先等概率选片段，再按片段内回报采样；全局帧号不会跨片段。"""
+    def __init__(self, nenv, clip, device, gamma, mode, max_step_reward):
+        self.starts = torch.tensor(clip.starts, device=device)
+        self.lengths = torch.tensor(clip.ends - clip.starts, device=device)
+        self.mode = mode
+        self.gamma = gamma
+        self.return_scale = max_step_reward / (1-gamma)
+        self.bin_starts = torch.cat([torch.arange(int(s), int(e), 50, device=device)
+                                     for s,e in zip(clip.starts, clip.ends)])
+        self.bin_clip = torch.cat([torch.full(((int(e-s)+49)//50,), i, device=device)
+                                   for i,(s,e) in enumerate(zip(clip.starts, clip.ends))]).long()
+        self.bin_spans = torch.minimum(torch.full_like(self.bin_starts, 50),
+                                      self.starts[self.bin_clip]+self.lengths[self.bin_clip]-self.bin_starts)
+        self.frame_bins = torch.zeros(len(clip.q), device=device, dtype=torch.long)
+        for i,(s,span) in enumerate(zip(self.bin_starts.tolist(),self.bin_spans.tolist())):
+            self.frame_bins[s:s+span] = i
+        self.value = torch.zeros(len(self.bin_starts), device=device)
+        self.memory = torch.ones_like(self.value)
+        self.rewards = torch.zeros(nenv, int(self.lengths.max()), device=device)
+        self.frames = torch.zeros_like(self.rewards, dtype=torch.long)
+        self.count = torch.zeros(nenv, device=device, dtype=torch.long)
+
+    def sample(self, n):
+        device = self.starts.device
+        clips = torch.randint(len(self.starts), (n,), device=device)
+        result = self.starts[clips].clone()
+        for i in range(len(self.starts)):
+            mask = clips == i
+            count = int(mask.sum())
+            if not count or self.mode == 'start':
+                continue
+            if self.mode == 'uniform':
+                result[mask] += torch.randint(int(self.lengths[i]), (count,), device=device)
+                continue
+            bins = (self.bin_clip == i).nonzero().flatten()
+            hard = torch.softmax(-25*self.value[bins]/self.return_scale, 0)
+            self.memory[bins] = .99*self.memory[bins] + .01*hard
+            prob = .5/len(bins)+.4*hard+.1*self.memory[bins]/self.memory[bins].sum()
+            chosen = bins[torch.multinomial(prob,count,replacement=True)]
+            sampled = self.bin_starts[chosen]+(torch.rand(count,device=device)*self.bin_spans[chosen]).long()
+            result[mask] = torch.where(torch.rand(count,device=device)<.2,self.starts[i],sampled)
+        return result
+
+    @torch.no_grad()
+    def record(self, reward, frame, done):
+        ids = torch.arange(len(reward), device=reward.device)
+        self.rewards[ids,self.count] = reward
+        self.frames[ids,self.count] = frame
+        self.count += 1
+        ended = ids[done]
+        if not len(ended):
+            return None
+        size = int(self.count[ended].max())
+        steps = torch.arange(size,device=reward.device)
+        valid = steps[None] < self.count[ended,None]
+        rewards = self.rewards[ended,:size]*valid
+        powers = self.gamma**steps.double()
+        discounted = rewards.double()*powers
+        returns = torch.flip(torch.cumsum(torch.flip(discounted,[1]),1),[1])/powers
+        bins = self.frame_bins[self.frames[ended,:size]][valid]
+        total = torch.zeros_like(self.value).index_add_(0,bins,returns[valid].float())
+        counts = torch.zeros_like(self.value).index_add_(0,bins,torch.ones_like(bins).float())
+        mask = counts > 0
+        self.value[mask] = .95*self.value[mask]+.05*total[mask]/counts[mask]
+        metrics = dict(episodes=len(ended),mean_reward=float((rewards.sum(1)/self.count[ended]).mean()),
+                       episode_steps=float(self.count[ended].float().mean()))
+        self.count[ended] = 0
+        return metrics

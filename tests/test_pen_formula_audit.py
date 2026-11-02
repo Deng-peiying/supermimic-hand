@@ -32,7 +32,7 @@ def test_reward_matches_independent_scalar_formula_and_gradcheck():
         - 0.02 * (0.02 / 0.12) ** 2
     )
     result = manager.compute(RewardInputs(state, ref, action, previous))
-    assert float(result.total) == pytest.approx(expected, abs=1e-8)
+    assert float(result.total) == pytest.approx(expected + 0.02 * 0.5, abs=1e-8)
     assert torch.autograd.gradcheck(
         lambda s, a: manager.compute(RewardInputs(s, ref, a, previous)).total,
         (state.requires_grad_(), action.requires_grad_()),

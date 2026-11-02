@@ -8,6 +8,7 @@ import torch.nn.functional as F
 
 from supermimic.core.state import RewardInputs as BaseRewardInputs
 from supermimic.core.state import StateLayout
+from supermimic.kinematics.rotations import quat_apply
 from supermimic.robots.prima1.config import STATE_LAYOUT
 
 
@@ -64,6 +65,22 @@ def action_delta_l2(data: RewardInputs, scale: float) -> torch.Tensor:
     """相邻执行目标归一化平方差均值；scale 单位 rad/控制步。"""
     _positive(scale)
     return ((data.target - data.previous_target) / scale).square().mean(-1)
+
+
+def flip_angular_velocity(quat, omega_body):
+    """MuJoCo自由关节角速度为物体系；转到掌心系后去掉长轴自旋。"""
+    axis = pen_axis(quat)
+    omega = quat_apply(F.normalize(quat, dim=-1), omega_body)
+    return omega - (omega * axis).sum(-1, keepdim=True) * axis
+
+
+def pen_flip_velocity_tracking(data: RewardInputs, std: float) -> torch.Tensor:
+    """翻转角速度向量跟踪(rad/s)，有方向；有理核避免大误差处指数饱和。"""
+    _positive(std)
+    actual = flip_angular_velocity(data.current("object_quat"), data.current("object_ang_vel"))
+    desired = flip_angular_velocity(data.desired("object_quat"), data.desired("object_ang_vel"))
+    error = (actual - desired).square().sum(-1)
+    return 1 / (1 + error / std**2)
 
 
 def _positive(value):

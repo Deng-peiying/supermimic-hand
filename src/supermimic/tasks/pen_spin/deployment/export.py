@@ -14,11 +14,14 @@ from ..policy.reference import FUTURE_FRAMES, future_joint_reference
 def export(actor, clip, env, out):
     actor = actor.cpu().eval()
     q = torch.tensor(clip.q[None, 0])
-    future = future_joint_reference(torch.tensor(clip.q), torch.tensor([0]), env.length, env.stage)
+    first_end = int(clip.ends[0]) if hasattr(clip, 'clips') else env.length
+    future = future_joint_reference(torch.tensor(clip.q), torch.tensor([0]), first_end, env.stage)
     scripted = torch.jit.trace(actor, (initial_history(q), future, torch.zeros(1, 1)))
     scripted.save(str(out / "actor.ts"))
     # 部署包只含 Actor 和已知参考关节，不包含世界模型及笔轨迹。
     np.savez_compressed(out / "joint_reference.npz", q=clip.q, dt=clip.dt)
+    if hasattr(clip, 'clips'):
+        np.savez_compressed(out / 'reference_boundaries.npz', starts=clip.starts, ends=clip.ends)
     schema = {
         **clip.provenance(),
         "history_shape": [1, HISTORY, 3 * NUM_JOINTS],
